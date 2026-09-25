@@ -12,12 +12,10 @@
     <h1>🧱 ONLINE TETRIS</h1>
     <p>最大5人でリアルタイム対戦</p>
     <input id="name" maxlength="16" placeholder="名前">
-    <input id="room" maxlength="12" placeholder="参加するルームコード（作成時は空欄でOK）">
-    <div class="roomBtns">
-      <button id="createRoom">ルームを作成</button>
-      <button id="join">コードで参加</button>
-    </div>
-    <div id="lobbyMsg">「ルームを作成」で6文字のコードを自動発行できます。</div>
+    <input id="room" type="text" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="ルームコード（6桁）">
+    <button id="join">ルームに参加</button>
+    <button id="createRoom" type="button">数字6桁のルームを作成</button>
+    <div id="lobbyMsg"></div>
   </div>
 </div>
 

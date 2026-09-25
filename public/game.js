@@ -58,56 +58,36 @@ function renderPlayers(){let el=document.getElementById("playerList");el.innerHT
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function startGame(){if(socket?.readyState===1)socket.send(JSON.stringify({type:"start"}))}
-function openRoom(mode){
+function makeRoomCode(){
+ return String(Math.floor(100000 + Math.random()*900000));
+}
+function join(){
  const name=document.getElementById("name").value.trim()||"Player";
- let code=document.getElementById("room").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
- if(mode==="create"){
-   code="";
- }else if(!code){
-   document.getElementById("lobbyMsg").textContent="参加するルームコードを入力してください。";
-   return;
- }
-
- const proto=location.protocol==="https:"?"wss":"ws";
- socket=new WebSocket(`${proto}://${location.host}`);
- document.getElementById("createRoom").disabled=true;
- document.getElementById("join").disabled=true;
- document.getElementById("lobbyMsg").textContent=mode==="create"?"ルームを作成しています…":"ルームに接続しています…";
-
- socket.onopen=()=>{
-   socket.send(JSON.stringify({type:mode,room:code,name}));
- };
- socket.onmessage=e=>{
-  let m=JSON.parse(e.data);
-  if(m.type==="joined"){
-    myId=m.id; room=m.room;
-    document.getElementById("room").value=m.room;
-    document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;
-    document.getElementById("lobby").classList.add("hidden");
-    document.getElementById("gameUI").classList.remove("hidden");
-    reset();
-    if(m.created) document.getElementById("message").textContent=`ルーム作成完了！ コード: ${m.room}`;
-  }
+ const roomInput=document.getElementById("room");
+ room=roomInput.value.replace(/\D/g,"").slice(0,6);
+ if(!room) room=makeRoomCode();
+ if(room.length!==6){document.getElementById("lobbyMsg").textContent="ルームコードは6桁の数字で入力してください";return;}
+ roomInput.value=room;
+ const proto=location.protocol==="https:"?"wss":"ws";socket=new WebSocket(`${proto}://${location.host}`);
+ socket.onopen=()=>socket.send(JSON.stringify({type:"join",room,name}));
+ socket.onmessage=e=>{let m=JSON.parse(e.data);
+  if(m.type==="joined"){myId=m.id;document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;document.getElementById("lobby").classList.add("hidden");document.getElementById("gameUI").classList.remove("hidden");reset()}
   if(m.type==="room"){players={};m.players.forEach(p=>players[p.id]=p);renderPlayers()}
   if(m.type==="start"){reset();running=true;document.getElementById("message").textContent=""}
   if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderPlayers()}
   if(m.type==="garbage"){addGarbage(m.lines);update()}
-  if(m.type==="error"){
-    document.getElementById("lobbyMsg").textContent=m.message;
-    document.getElementById("createRoom").disabled=false;
-    document.getElementById("join").disabled=false;
-    if(socket && socket.readyState===WebSocket.OPEN) socket.close();
-  }
+  if(m.type==="error"){document.getElementById("lobbyMsg").textContent=m.message}
  };
- socket.onclose=()=>{
-   document.getElementById("createRoom").disabled=false;
-   document.getElementById("join").disabled=false;
-   if(!document.getElementById("gameUI").classList.contains("hidden")) document.getElementById("message").textContent="サーバーから切断されました";
- };
+ socket.onclose=()=>document.getElementById("message").textContent="サーバーから切断されました";
 }
-
-document.getElementById("createRoom").onclick=()=>openRoom("create");document.getElementById("join").onclick=()=>openRoom("join");document.getElementById("startBtn").onclick=startGame;
+const roomInput=document.getElementById("room");
+roomInput.addEventListener("input",()=>{roomInput.value=roomInput.value.replace(/\D/g,"").slice(0,6)});
+document.getElementById("join").onclick=join;
+document.getElementById("createRoom").onclick=()=>{roomInput.value=makeRoomCode();document.getElementById("lobbyMsg").textContent="6桁のルームコードを作成しました。参加を押してください。"};
+document.getElementById("startBtn").onclick=startGame;
 document.addEventListener("keydown",e=>{
+ // ロビーの入力欄ではゲーム操作を無効化し、Q/W/A/S/D/Z/Cを普通に入力できるようにする。
+ if(e.target && (e.target.tagName==="INPUT" || e.target.tagName==="TEXTAREA" || e.target.isContentEditable)) return;
  if(["a","d","w","s","z","c","q"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key.toLowerCase()))e.preventDefault();
  switch(e.key.toLowerCase()){
   case"a":move(1);break; case"d":move(-1);break; case"z":rotate(-1);break; case"c":rotate(1);break;
