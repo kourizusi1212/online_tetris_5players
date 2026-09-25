@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Online Tetris 5</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="lobby" class="screen">
+  <div class="card">
+    <h1>🧱 ONLINE TETRIS</h1>
+    <p>最大5人でリアルタイム対戦</p>
+    <input id="name" maxlength="16" placeholder="名前">
+    <input id="room" maxlength="12" placeholder="ルームコード">
+    <button id="join">ルームに参加</button>
+    <div id="lobbyMsg"></div>
+  </div>
+</div>
+
+<div id="gameUI" class="hidden">
+<header><b>ONLINE TETRIS</b><span id="roomLabel"></span><button id="startBtn">ゲーム開始</button></header>
+<main>
+<aside class="side">
+  <section><h3>ホールド</h3><canvas id="hold" width="120" height="100"></canvas></section>
+  <section><h3>次のブロック</h3><canvas id="next" width="120" height="100"></canvas></section>
+  <section class="stats">
+    <div>スコア <b id="score">0</b></div>
+    <div>ライン <b id="lines">0</b></div>
+    <div>レベル <b id="level">1</b></div>
+  </section>
+  <section><h3>操作</h3>
+    <p><b>A</b> 右へ　<b>D</b> 左へ</p>
+    <p><b>Z</b> 左回転　<b>C</b> 右回転</p>
+    <p><b>W / Space</b> ハードドロップ</p>
+    <p><b>S</b> ソフトドロップ</p>
+    <p><b>Q</b> ホールド</p>
+  </section>
+</aside>
+
+<section class="center">
+  <canvas id="board" width="300" height="600"></canvas>
+  <div id="message"></div>
+</section>
+
+<aside class="players"><h3>プレイヤー</h3><div id="playerList"></div></aside>
+</main>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
