@@ -7,7 +7,7 @@ const SHAPES=[
 const boardC=document.getElementById("board"),ctx=boardC.getContext("2d");
 const nextC=document.getElementById("next"),nctx=nextC.getContext("2d");
 const holdC=document.getElementById("hold"),hctx=holdC.getContext("2d");
-let socket,room="",myId="",players={},board,cur,next,hold=null,canHold=true;
+let socket,room="",myId="",players={},board,cur,next,hold=null,canHold=true,host=false;
 let score=0,lines=0,level=1,running=false,over=false,paused=false,last=0,fall=0;
 
 function empty(){return Array.from({length:H},()=>Array(W).fill(0))}
@@ -57,65 +57,69 @@ function renderPlayers(){let el=document.getElementById("playerList");el.innerHT
  Object.values(players).forEach(p=>{let d=document.createElement("div");d.className="player"+(p.id===myId?" me":"")+(p.alive===false?" dead":"");d.innerHTML=`<b>${esc(p.name)}</b><br><small>${p.alive===false?"脱落":"プレイ中"}　スコア ${p.score||0}</small><div class="bar"><i style="width:${Math.min(100,(p.lines||0)%100)}%"></i></div>`;el.appendChild(d)})
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function startGame(){if(socket?.readyState===1)socket.send(JSON.stringify({type:"start"}))}
-function makeRoomCode(){
- return String(Math.floor(100000 + Math.random()*900000));
+function setLobbyMessage(t){document.getElementById("lobbyMsg").textContent=t||"";}
+function renderRoom(){
+ const list=document.getElementById("playerList");
+ list.innerHTML=Object.values(players).map(p=>`<div class="player${p.id===myId?" me":""}"><b>${esc(p.name)}</b> ${p.id===myId?"(自分)":""}<br><small>${p.ready?"✓ READY":"未準備"}　スコア ${p.score||0}</small></div>`).join("");
+ document.getElementById("roomPanel").classList.remove("hidden");
+ document.getElementById("roomLabelLobby").textContent=`ROOM: ${room}`;
+ document.getElementById("readyBtn").textContent=(players[myId]?.ready?"↩ READY解除":"✅ READY");
+ document.getElementById("startBtn").style.display=host?"block":"none";
 }
-function connect(action, code, name){
+function startGame(){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:"start"}));}
+function createRoom(){
+ const name=document.getElementById("name").value.trim()||"Player";
+ setLobbyMessage("ルームを作成中…");
+ if(socket?.readyState!==WebSocket.OPEN)return setLobbyMessage("サーバーに接続中です。少し待ってください。");
+ socket.send(JSON.stringify({type:"create",name}));
+}
+function joinRoom(){
+ const name=document.getElementById("name").value.trim()||"Player";
+ const input=document.getElementById("room"); const code=input.value.replace(/\D/g,"").slice(0,4); input.value=code;
+ if(code.length!==4)return setLobbyMessage("参加するには4桁のルームコードを入力してください。");
+ setLobbyMessage("ルームに接続中…");
+ if(socket?.readyState!==WebSocket.OPEN)return setLobbyMessage("サーバーに接続中です。少し待ってください。");
+ socket.send(JSON.stringify({type:"join",room:code,name}));
+}
+function connect(){
  const proto=location.protocol==="https:"?"wss":"ws";
- try{ socket=new WebSocket(`${proto}://${location.host}`); }
- catch(e){ document.getElementById("lobbyMsg").textContent="サーバーへ接続できません"; return; }
- socket.onopen=()=>{
-  if(action==="create") socket.send(JSON.stringify({type:"create",name}));
-  else socket.send(JSON.stringify({type:"join",room:code,name}));
- };
+ try{socket=new WebSocket(`${proto}://${location.host}`);}catch(e){setLobbyMessage("サーバーへ接続できません。");return;}
+ socket.onopen=()=>setLobbyMessage("サーバーに接続しました。部屋を作成するか、4桁コードで参加してください。");
+ socket.onerror=()=>setLobbyMessage("サーバーとの接続に失敗しました。数秒待って再試行してください。");
+ socket.onclose=()=>{if(running){running=false;document.getElementById("message").textContent="サーバーから切断されました";}else setLobbyMessage("サーバーとの接続が切れました。ページを再読み込みしてください。");};
  socket.onmessage=e=>{
-  let m; try{m=JSON.parse(e.data)}catch{return;}
+  let m;try{m=JSON.parse(e.data)}catch{return;}
+  if(m.type==="connected")return;
   if(m.type==="joined"){
-   myId=m.id; room=m.room;
-   document.getElementById("room").value=m.room;
-   document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;
-   document.getElementById("lobby").classList.add("hidden");
-   document.getElementById("gameUI").classList.remove("hidden");
-   document.getElementById("lobbyMsg").textContent="";
+   myId=m.id;room=m.room;host=!!m.host;
+   document.getElementById("room").value=room;
+   document.getElementById("roomCode").textContent=room;
+   setLobbyMessage("ルームに参加しました。全員READY後、部屋主が開始できます。");
    reset();
   }
-  if(m.type==="room"){players={};m.players.forEach(p=>players[p.id]=p);renderPlayers();}
-  if(m.type==="start"){reset();running=true;document.getElementById("message").textContent="";}
-  if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderPlayers();}
-  if(m.type==="garbage"){addGarbage(m.lines);update();}
-  if(m.type==="error"){
-   document.getElementById("lobbyMsg").textContent=m.message;
-   if(socket && socket.readyState!==WebSocket.OPEN) socket.close();
+  if(m.type==="room"){
+   players={};(m.players||[]).forEach(p=>players[p.id]=p);host=m.host===myId;renderRoom();
   }
+  if(m.type==="start"){
+   reset();running=true;document.getElementById("lobby").classList.add("hidden");document.getElementById("message").textContent="";
+  }
+  if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderRoom();}
+  if(m.type==="garbage"){if(running){addGarbage(m.lines);update();}}
+  if(m.type==="error")setLobbyMessage(m.message||"エラーが発生しました。");
  };
- socket.onerror=()=>{document.getElementById("lobbyMsg").textContent="サーバーとの接続に失敗しました。Renderが起動中の場合は数秒待って再試行してください。";};
- socket.onclose=()=>{if(!running) return; document.getElementById("message").textContent="サーバーから切断されました";};
-}
-function join(){
- const name=document.getElementById("name").value.trim()||"Player";
- const roomInput=document.getElementById("room");
- const code=roomInput.value.replace(/\D/g,"").slice(0,6);
- roomInput.value=code;
- if(code.length!==6){document.getElementById("lobbyMsg").textContent="参加するには6桁のルームコードを入力してください";return;}
- document.getElementById("lobbyMsg").textContent="ルームに接続中…";
- connect("join",code,name);
 }
 const roomInput=document.getElementById("room");
-roomInput.addEventListener("input",()=>{roomInput.value=roomInput.value.replace(/\D/g,"").slice(0,6)});
-document.getElementById("join").onclick=join;
-document.getElementById("createRoom").onclick=()=>{
- const name=document.getElementById("name").value.trim()||"Player";
- document.getElementById("lobbyMsg").textContent="ルームを作成中…";
- connect("create",null,name);
-};
+roomInput.addEventListener("keydown",e=>e.stopPropagation());
+roomInput.addEventListener("input",()=>{roomInput.value=roomInput.value.replace(/\D/g,"").slice(0,4);});
+document.getElementById("join").onclick=joinRoom;
+document.getElementById("createRoom").onclick=createRoom;
+document.getElementById("readyBtn").onclick=()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:"ready"}));};
 document.getElementById("startBtn").onclick=startGame;
+document.getElementById("copyRoom").onclick=async()=>{try{await navigator.clipboard.writeText(room);setLobbyMessage("ルームコードをコピーしました！");}catch{setLobbyMessage("コピーできませんでした。");}};
 document.addEventListener("keydown",e=>{
  if(e.target&&(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.isContentEditable))return;
  if(["a","d","w","s","z","c","q"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key.toLowerCase()))e.preventDefault();
- switch(e.key.toLowerCase()){
-  case"a":move(1);break;case"d":move(-1);break;case"z":rotate(-1);break;case"c":rotate(1);break;
-  case"w":case" ":hard();break;case"s":soft();break;case"q":holdPiece();break;case"p":if(running)paused=!paused;break;
- }
+ switch(e.key.toLowerCase()){case"a":move(1);break;case"d":move(-1);break;case"z":rotate(-1);break;case"c":rotate(1);break;case"w":case" ":hard();break;case"s":soft();break;case"q":holdPiece();break;case"p":if(running)paused=!paused;break;}
 });
+connect();
 reset();requestAnimationFrame(loop);

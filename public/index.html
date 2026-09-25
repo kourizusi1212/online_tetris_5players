@@ -12,10 +12,20 @@
     <h1>🧱 ONLINE TETRIS</h1>
     <p>最大5人でリアルタイム対戦</p>
     <input id="name" maxlength="16" placeholder="名前">
-    <input id="room" type="text" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="ルームコード（6桁）">
+    <input id="room" type="text" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="ルームコード（4桁）">
     <button id="join">ルームに参加</button>
-    <button id="createRoom" type="button">数字6桁のルームを作成</button>
-    <div id="lobbyMsg"></div>
+    <button id="createRoom" type="button">🏠 ルームを作る</button>
+    <div id="lobbyMsg">サーバーに接続中…</div>
+    <div id="roomPanel" class="hidden">
+      <hr>
+      <h2 id="roomLabelLobby">ROOM: ----</h2>
+      <div class="roomcode" id="roomCode">----</div>
+      <button id="copyRoom">📋 ルームコードをコピー</button>
+      <div id="playerList"></div>
+      <button id="readyBtn">✅ READY</button>
+      <button id="startBtn" style="display:none">ゲーム開始</button>
+      <small>2〜5人。全員READY後、部屋主がゲームを開始できます。</small>
+    </div>
   </div>
 </div>
 
