@@ -61,38 +61,61 @@ function startGame(){if(socket?.readyState===1)socket.send(JSON.stringify({type:
 function makeRoomCode(){
  return String(Math.floor(100000 + Math.random()*900000));
 }
+function connect(action, code, name){
+ const proto=location.protocol==="https:"?"wss":"ws";
+ try{ socket=new WebSocket(`${proto}://${location.host}`); }
+ catch(e){ document.getElementById("lobbyMsg").textContent="サーバーへ接続できません"; return; }
+ socket.onopen=()=>{
+  if(action==="create") socket.send(JSON.stringify({type:"create",name}));
+  else socket.send(JSON.stringify({type:"join",room:code,name}));
+ };
+ socket.onmessage=e=>{
+  let m; try{m=JSON.parse(e.data)}catch{return;}
+  if(m.type==="joined"){
+   myId=m.id; room=m.room;
+   document.getElementById("room").value=m.room;
+   document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;
+   document.getElementById("lobby").classList.add("hidden");
+   document.getElementById("gameUI").classList.remove("hidden");
+   document.getElementById("lobbyMsg").textContent="";
+   reset();
+  }
+  if(m.type==="room"){players={};m.players.forEach(p=>players[p.id]=p);renderPlayers();}
+  if(m.type==="start"){reset();running=true;document.getElementById("message").textContent="";}
+  if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderPlayers();}
+  if(m.type==="garbage"){addGarbage(m.lines);update();}
+  if(m.type==="error"){
+   document.getElementById("lobbyMsg").textContent=m.message;
+   if(socket && socket.readyState!==WebSocket.OPEN) socket.close();
+  }
+ };
+ socket.onerror=()=>{document.getElementById("lobbyMsg").textContent="サーバーとの接続に失敗しました。Renderが起動中の場合は数秒待って再試行してください。";};
+ socket.onclose=()=>{if(!running) return; document.getElementById("message").textContent="サーバーから切断されました";};
+}
 function join(){
  const name=document.getElementById("name").value.trim()||"Player";
  const roomInput=document.getElementById("room");
- room=roomInput.value.replace(/\D/g,"").slice(0,6);
- if(!room) room=makeRoomCode();
- if(room.length!==6){document.getElementById("lobbyMsg").textContent="ルームコードは6桁の数字で入力してください";return;}
- roomInput.value=room;
- const proto=location.protocol==="https:"?"wss":"ws";socket=new WebSocket(`${proto}://${location.host}`);
- socket.onopen=()=>socket.send(JSON.stringify({type:"join",room,name}));
- socket.onmessage=e=>{let m=JSON.parse(e.data);
-  if(m.type==="joined"){myId=m.id;document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;document.getElementById("lobby").classList.add("hidden");document.getElementById("gameUI").classList.remove("hidden");reset()}
-  if(m.type==="room"){players={};m.players.forEach(p=>players[p.id]=p);renderPlayers()}
-  if(m.type==="start"){reset();running=true;document.getElementById("message").textContent=""}
-  if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderPlayers()}
-  if(m.type==="garbage"){addGarbage(m.lines);update()}
-  if(m.type==="error"){document.getElementById("lobbyMsg").textContent=m.message}
- };
- socket.onclose=()=>document.getElementById("message").textContent="サーバーから切断されました";
+ const code=roomInput.value.replace(/\D/g,"").slice(0,6);
+ roomInput.value=code;
+ if(code.length!==6){document.getElementById("lobbyMsg").textContent="参加するには6桁のルームコードを入力してください";return;}
+ document.getElementById("lobbyMsg").textContent="ルームに接続中…";
+ connect("join",code,name);
 }
 const roomInput=document.getElementById("room");
 roomInput.addEventListener("input",()=>{roomInput.value=roomInput.value.replace(/\D/g,"").slice(0,6)});
 document.getElementById("join").onclick=join;
-document.getElementById("createRoom").onclick=()=>{roomInput.value=makeRoomCode();document.getElementById("lobbyMsg").textContent="6桁のルームコードを作成しました。参加を押してください。"};
+document.getElementById("createRoom").onclick=()=>{
+ const name=document.getElementById("name").value.trim()||"Player";
+ document.getElementById("lobbyMsg").textContent="ルームを作成中…";
+ connect("create",null,name);
+};
 document.getElementById("startBtn").onclick=startGame;
 document.addEventListener("keydown",e=>{
- // ロビーの入力欄ではゲーム操作を無効化し、Q/W/A/S/D/Z/Cを普通に入力できるようにする。
- if(e.target && (e.target.tagName==="INPUT" || e.target.tagName==="TEXTAREA" || e.target.isContentEditable)) return;
+ if(e.target&&(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.isContentEditable))return;
  if(["a","d","w","s","z","c","q"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key.toLowerCase()))e.preventDefault();
  switch(e.key.toLowerCase()){
-  case"a":move(1);break; case"d":move(-1);break; case"z":rotate(-1);break; case"c":rotate(1);break;
-  case"w":case" ":hard();break; case"s":soft();break; case"q":holdPiece();break;
-  case"p":if(running)paused=!paused;break;
+  case"a":move(1);break;case"d":move(-1);break;case"z":rotate(-1);break;case"c":rotate(1);break;
+  case"w":case" ":hard();break;case"s":soft();break;case"q":holdPiece();break;case"p":if(running)paused=!paused;break;
  }
 });
 reset();requestAnimationFrame(loop);
