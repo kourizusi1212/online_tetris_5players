@@ -39,16 +39,32 @@ wss.on("connection", ws=>{
 
   ws.on("message", raw=>{
     let m; try{m=JSON.parse(raw)}catch{return}
-    if(m.type==="join"){
-      const code=String(m.room||"").trim().toUpperCase().slice(0,12);
-      if(!code) return send(ws,{type:"error",message:"ルームコードを入力してください"});
+    if(m.type==="create" || m.type==="join"){
+      let code=String(m.room||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+
+      if(m.type==="create"){
+        if(ws.room) return send(ws,{type:"error",message:"すでにルームに参加しています"});
+        // クライアント指定コードが空なら、サーバー側でも6文字コードを生成
+        if(!code){
+          const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+          do{
+            code="";
+            for(let i=0;i<6;i++) code+=chars[Math.floor(Math.random()*chars.length)];
+          }while(rooms.has(code));
+        }
+        if(rooms.has(code)) return send(ws,{type:"error",message:"そのルームコードはすでに使用されています。別のコードを作ってください"});
+      } else {
+        if(!code) return send(ws,{type:"error",message:"ルームコードを入力してください"});
+        if(!rooms.has(code)) return send(ws,{type:"error",message:"そのルームは存在しません。先に「ルームを作成」してください"});
+      }
+
       let room=rooms.get(code);
       if(!room){room={players:[],started:false};rooms.set(code,room)}
       if(room.players.length>=MAX_PLAYERS) return send(ws,{type:"error",message:"このルームは満員です（最大5人）"});
       if(ws.room) return;
       ws.room=code; ws.name=String(m.name||"Player").slice(0,16); ws.score=0; ws.lines=0; ws.alive=true;
       room.players.push(ws);
-      send(ws,{type:"joined",id:ws.id,room:code,max:MAX_PLAYERS});
+      send(ws,{type:"joined",id:ws.id,room:code,max:MAX_PLAYERS,created:m.type==="create"});
       broadcast(room,roomState(room));
     }
     else if(m.type==="start" && ws.room){

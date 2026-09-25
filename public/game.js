@@ -58,22 +58,55 @@ function renderPlayers(){let el=document.getElementById("playerList");el.innerHT
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function startGame(){if(socket?.readyState===1)socket.send(JSON.stringify({type:"start"}))}
-function join(){
+function openRoom(mode){
  const name=document.getElementById("name").value.trim()||"Player";
- room=document.getElementById("room").value.trim().toUpperCase()||"ROOM1";
- const proto=location.protocol==="https:"?"wss":"ws";socket=new WebSocket(`${proto}://${location.host}`);
- socket.onopen=()=>socket.send(JSON.stringify({type:"join",room,name}));
- socket.onmessage=e=>{let m=JSON.parse(e.data);
-  if(m.type==="joined"){myId=m.id;document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;document.getElementById("lobby").classList.add("hidden");document.getElementById("gameUI").classList.remove("hidden");reset()}
+ let code=document.getElementById("room").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+ if(mode==="create"){
+   code="";
+ }else if(!code){
+   document.getElementById("lobbyMsg").textContent="参加するルームコードを入力してください。";
+   return;
+ }
+
+ const proto=location.protocol==="https:"?"wss":"ws";
+ socket=new WebSocket(`${proto}://${location.host}`);
+ document.getElementById("createRoom").disabled=true;
+ document.getElementById("join").disabled=true;
+ document.getElementById("lobbyMsg").textContent=mode==="create"?"ルームを作成しています…":"ルームに接続しています…";
+
+ socket.onopen=()=>{
+   socket.send(JSON.stringify({type:mode,room:code,name}));
+ };
+ socket.onmessage=e=>{
+  let m=JSON.parse(e.data);
+  if(m.type==="joined"){
+    myId=m.id; room=m.room;
+    document.getElementById("room").value=m.room;
+    document.getElementById("roomLabel").textContent=`ROOM: ${m.room}`;
+    document.getElementById("lobby").classList.add("hidden");
+    document.getElementById("gameUI").classList.remove("hidden");
+    reset();
+    if(m.created) document.getElementById("message").textContent=`ルーム作成完了！ コード: ${m.room}`;
+  }
   if(m.type==="room"){players={};m.players.forEach(p=>players[p.id]=p);renderPlayers()}
   if(m.type==="start"){reset();running=true;document.getElementById("message").textContent=""}
   if(m.type==="playerUpdate"){if(players[m.id])Object.assign(players[m.id],m);renderPlayers()}
   if(m.type==="garbage"){addGarbage(m.lines);update()}
-  if(m.type==="error"){document.getElementById("lobbyMsg").textContent=m.message}
+  if(m.type==="error"){
+    document.getElementById("lobbyMsg").textContent=m.message;
+    document.getElementById("createRoom").disabled=false;
+    document.getElementById("join").disabled=false;
+    if(socket && socket.readyState===WebSocket.OPEN) socket.close();
+  }
  };
- socket.onclose=()=>document.getElementById("message").textContent="サーバーから切断されました";
+ socket.onclose=()=>{
+   document.getElementById("createRoom").disabled=false;
+   document.getElementById("join").disabled=false;
+   if(!document.getElementById("gameUI").classList.contains("hidden")) document.getElementById("message").textContent="サーバーから切断されました";
+ };
 }
-document.getElementById("join").onclick=join;document.getElementById("startBtn").onclick=startGame;
+
+document.getElementById("createRoom").onclick=()=>openRoom("create");document.getElementById("join").onclick=()=>openRoom("join");document.getElementById("startBtn").onclick=startGame;
 document.addEventListener("keydown",e=>{
  if(["a","d","w","s","z","c","q"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key.toLowerCase()))e.preventDefault();
  switch(e.key.toLowerCase()){
