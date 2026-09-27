@@ -60,3 +60,5 @@ input:focus{border-color:#7180ff;box-shadow:0 0 0 3px #7180ff22}
 .meter i{display:block;height:100%;background:#6573ff}
 @media(max-width:900px){.game-layout{grid-template-columns:180px minmax(260px,1fr)}.right-column{grid-column:1/-1}.opponents{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.opponents-title{grid-column:1/-1}}
 @media(max-width:650px){.game-layout{grid-template-columns:1fr}.left-column{grid-template-columns:1fr 1fr}.controls,.stats{grid-column:1/-1}.board-area{order:-1}.right-column{grid-column:auto}.opponents{display:block}.room-code{font-size:38px}}
+
+.card,.panel,#board{contain:layout paint;}

@@ -69,7 +69,7 @@ function collision(p, dx=0, dy=0, shape=p.shape){
 }
 function move(dx){
   if(!running || paused || gameOver) return;
-  if(!collision(current,dx,0)) current.x += dx;
+  if(!collision(current,dx,0)){ current.x += dx; requestDraw(); }
 }
 function rotate(dir){
   if(!running || paused || gameOver) return;
@@ -87,11 +87,12 @@ function rotate(dir){
       current.x -= kick;
     }
     if(!fixed) current.shape = old;
+  requestDraw();
   }
 }
 function softDrop(){
   if(!running || paused || gameOver) return;
-  if(!collision(current,0,1)){ current.y++; score++; }
+  if(!collision(current,0,1)){ current.y++; score++; requestDraw(); }
   else lockPiece();
   updateHud();
 }
@@ -143,6 +144,7 @@ function lockPiece(){
   }
   current = takeNext();
   canHold = true;
+  requestDraw();
   if(collision(current)) finishGame();
 }
 function addGarbage(count){
@@ -152,6 +154,7 @@ function addGarbage(count){
     const row = Array(W).fill(8);
     row[hole] = 0;
     board.push(row);
+  requestDraw();
   }
 }
 function finishGame(){
@@ -200,12 +203,15 @@ function draw(){
   drawMini(nctx,next?.shape,next?.color);
   drawMini(hctx,hold?.shape,hold?.color);
 }
+let drawDirty = true;
+function requestDraw(){ drawDirty = true; }
 function updateHud(){
   $("scoreValue").textContent = score.toLocaleString();
   $("linesValue").textContent = lines;
   $("levelValue").textContent = level;
-  draw();
+  requestDraw();
 }
+let lastRender = 0;
 function loop(t){
   const dt = Math.min(100, t - lastTime || 0);
   lastTime = t;
@@ -213,6 +219,11 @@ function loop(t){
     fallTimer += dt;
     const interval = Math.max(75, 800 - (level-1)*60);
     if(fallTimer >= interval){ softDrop(); fallTimer = 0; }
+  }
+  if(drawDirty && t-lastRender >= 16){
+    draw();
+    drawDirty = false;
+    lastRender = t;
   }
   requestAnimationFrame(loop);
 }
