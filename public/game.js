@@ -58,6 +58,7 @@ function resetGame(){
   current = takeNext();
   running = false; gameOver = false; paused = false;
   $("gameMessage").classList.add("hidden");
+  $("rematchBtn").classList.add("hidden");
   updateHud(); draw();
 }
 function collision(p, dx=0, dy=0, shape=p.shape){
@@ -347,6 +348,14 @@ function handleMessage(m){
       break;
     case "host_changed":
       break;
+    case "game_winner": {
+      gameOver = true;
+      running = false;
+      const isWinner = m.winnerId === myId;
+      showMessage(isWinner ? "🎉 勝利！" : `🏆 ${escapeHtml(m.winnerName || "Player")} の勝利！`);
+      $("rematchBtn").classList.remove("hidden");
+      break;
+    }
     case "game_start":
       resetGame();
       running=true;
@@ -431,6 +440,7 @@ $("createBtn").onclick=createRoom;
 $("joinBtn").onclick=joinRoom;
 $("readyBtn").onclick=()=>send({type:"ready"});
 $("lobbyStartBtn").onclick=()=>send({type:"start"});
+$("rematchBtn").onclick=()=>send({type:"restart"});
 $("backBtn").onclick=leave;
 $("copyBtn").onclick=async()=>{
   try{

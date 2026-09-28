@@ -112,6 +112,7 @@ function createRoom(ws, requestedCode, name) {
     host: null,
     ready: new Set(),
     started: false,
+    winnerId: null,
     createdAt: Date.now()
   };
   rooms.set(code, room);
@@ -230,15 +231,28 @@ wss.on("connection", ws => {
     if (type === "alive") {
       if (!room.started) return;
       ws.alive = Boolean(msg.alive);
-      return broadcast(room, {
+      broadcast(room, {
         type: "player_update",
         id: ws.id, score: ws.score, lines: ws.lines, alive: ws.alive
       });
+
+      const alivePlayers = room.players.filter(p => p.alive);
+      if (ws.alive === false && alivePlayers.length === 1 && room.started) {
+        const winner = alivePlayers[0];
+        room.winnerId = winner.id;
+        room.started = false;
+        return broadcast(room, {
+          type: "game_winner",
+          winnerId: winner.id,
+          winnerName: winner.name
+        });
+      }
+      return;
     }
 
     if (type === "restart") {
-      if (ws.id !== room.host) return;
-      room.started = false;
+      if (room.started) return;
+      room.winnerId = null;
       room.ready.clear();
       room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; });
       return broadcast(room, roomState(room));

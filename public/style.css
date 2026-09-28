@@ -62,3 +62,5 @@ input:focus{border-color:#7180ff;box-shadow:0 0 0 3px #7180ff22}
 @media(max-width:650px){.game-layout{grid-template-columns:1fr}.left-column{grid-template-columns:1fr 1fr}.controls,.stats{grid-column:1/-1}.board-area{order:-1}.right-column{grid-column:auto}.opponents{display:block}.room-code{font-size:38px}}
 
 .card,.panel,#board{contain:layout paint;}
+
+.rematch-btn{position:absolute;z-index:3;left:50%;top:calc(50% + 58px);transform:translateX(-50%);padding:10px 24px;border:1px solid #6d83b8;border-radius:10px;background:#182641;color:#fff;font-weight:900;cursor:pointer}.rematch-btn:hover{filter:brightness(1.2)}
