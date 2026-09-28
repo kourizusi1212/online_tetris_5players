@@ -34,6 +34,10 @@ let running = false, gameOver = false, paused = false;
 let lastTime = 0, fallTimer = 0;
 let reconnectTimer = null;
 let intentionalClose = false;
+let clearingRows = [];
+let clearAnimStart = 0;
+let clearAnimDuration = 260;
+let pendingCleared = 0;
 
 function emptyBoard(){ return Array.from({length:H}, () => Array(W).fill(0)); }
 function cloneShape(shape){ return shape.map(r => r.slice()); }
@@ -119,6 +123,7 @@ function holdPiece(){
   updateHud();
 }
 function lockPiece(){
+  if(clearingRows.length) return;
   for(let y=0;y<current.shape.length;y++){
     for(let x=0;x<current.shape[y].length;x++){
       if(current.shape[y][x] && current.y+y >= 0 && current.x+x >= 0 && current.x+x < W)
@@ -126,26 +131,47 @@ function lockPiece(){
     }
   }
 
-  let cleared = 0;
-  for(let y=H-1;y>=0;y--){
-    if(board[y].every(Boolean)){
-      board.splice(y,1);
-      board.unshift(Array(W).fill(0));
-      cleared++; y++;
-    }
+  const rows = [];
+  for(let y=0;y<H;y++) if(board[y].every(Boolean)) rows.push(y);
+
+  if(rows.length){
+    clearingRows = rows;
+    pendingCleared = rows.length;
+    clearAnimStart = performance.now();
+    requestDraw();
+    return;
   }
-  if(cleared){
-    lines += cleared;
-    const points = [0,100,300,500,800][cleared] || 800;
-    score += points * level;
-    level = Math.floor(lines / 10) + 1;
-    send({type:"score",score,lines});
-    send({type:"garbage",lines:Math.min(4,cleared)});
-  }
+
+  spawnNextPiece();
+}
+function spawnNextPiece(){
   current = takeNext();
   canHold = true;
   requestDraw();
   if(collision(current)) finishGame();
+}
+function finishLineClear(){
+  const cleared = pendingCleared;
+  // 下の行から消して、上から空行を追加
+  for(let i=clearingRows.length-1;i>=0;i--) board.splice(clearingRows[i],1);
+  while(board.length < H) board.unshift(Array(W).fill(0));
+  clearingRows = [];
+  pendingCleared = 0;
+
+  lines += cleared;
+  const points = [0,100,300,500,800][cleared] || 800;
+  score += points * level;
+  level = Math.floor(lines / 10) + 1;
+  send({type:"score",score,lines});
+  send({type:"garbage",lines:Math.min(4,cleared)});
+  spawnNextPiece();
+  updateHud();
+}
+function getGhostY(){
+  if(!current) return 0;
+  let y = current.y;
+  while(!collision({...current,y},0,1)) y++;
+  return y;
 }
 function addGarbage(count){
   for(let i=0;i<count;i++){
@@ -199,7 +225,37 @@ function draw(){
   for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*CELL+.5,0);ctx.lineTo(x*CELL+.5,600);ctx.stroke();}
   for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*CELL+.5);ctx.lineTo(300,y*CELL+.5);ctx.stroke();}
   for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(board[y][x])drawCell(ctx,x,y,board[y][x]);
-  if(current) current.shape.forEach((row,y)=>row.forEach((v,x)=>{if(v)drawCell(ctx,current.x+x,current.y+y,current.color)}));
+
+  // ゴーストブロック：実際に着地する位置を半透明で表示
+  if(current && !clearingRows.length){
+    const gy = getGhostY();
+    current.shape.forEach((row,y)=>row.forEach((v,x)=>{
+      if(!v || gy+y < 0) return;
+      const px=(current.x+x)*CELL+2, py=(gy+y)*CELL+2;
+      ctx.fillStyle = "rgba(255,255,255,.10)";
+      ctx.fillRect(px,py,CELL-4,CELL-4);
+      ctx.strokeStyle = "rgba(255,255,255,.42)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px,py,CELL-4,CELL-4);
+    }));
+  }
+
+  if(current && !clearingRows.length) current.shape.forEach((row,y)=>row.forEach((v,x)=>{if(v)drawCell(ctx,current.x+x,current.y+y,current.color)}));
+
+  // ライン消去演出：点滅→白い光が広がる
+  if(clearingRows.length){
+    const elapsed = performance.now() - clearAnimStart;
+    const progress = Math.min(1, elapsed / clearAnimDuration);
+    const pulse = 0.45 + Math.sin(progress * Math.PI * 4) * 0.25;
+    clearingRows.forEach(y=>{
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(.18,pulse)})`;
+      ctx.fillRect(0,y*CELL,300,CELL);
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0,0.75-progress*.65)})`;
+      const w = 300 * progress;
+      ctx.fillRect((300-w)/2,y*CELL+3,w,CELL-6);
+    });
+  }
+
   drawMini(nctx,next?.shape,next?.color);
   drawMini(hctx,hold?.shape,hold?.color);
 }
@@ -215,11 +271,16 @@ let lastRender = 0;
 function loop(t){
   const dt = Math.min(100, t - lastTime || 0);
   lastTime = t;
-  if(running && !paused && !gameOver){
+
+  if(clearingRows.length){
+    requestDraw();
+    if(t - clearAnimStart >= clearAnimDuration) finishLineClear();
+  } else if(running && !paused && !gameOver){
     fallTimer += dt;
     const interval = Math.max(75, 800 - (level-1)*60);
     if(fallTimer >= interval){ softDrop(); fallTimer = 0; }
   }
+
   if(drawDirty && t-lastRender >= 16){
     draw();
     drawDirty = false;
