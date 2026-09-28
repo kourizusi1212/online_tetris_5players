@@ -87,8 +87,8 @@ function rotate(dir){
       current.x -= kick;
     }
     if(!fixed) current.shape = old;
-  requestDraw();
   }
+  requestDraw();
 }
 function softDrop(){
   if(!running || paused || gameOver) return;
@@ -386,16 +386,23 @@ $("nameInput").addEventListener("keydown",e=>{if(e.key==="Enter")createRoom()});
 document.addEventListener("keydown",e=>{
   const tag=e.target?.tagName;
   if(tag==="INPUT" || tag==="TEXTAREA" || e.target?.isContentEditable) return;
+
   const key=e.key.toLowerCase();
-  if(["a","d","z","c","w","s","q","p"," "].includes(key)) e.preventDefault();
-  if(key==="a")move(-1);
-  else if(key==="d")move(1);
-  else if(key==="z")rotate(-1);
-  else if(key==="c")rotate(1);
-  else if(key==="s")softDrop();
-  else if(key==="w" || key===" ")hardDrop();
-  else if(key==="q")holdPiece();
-  else if(key==="p" && running){paused=!paused; if(paused)showMessage("PAUSED");else clearMessage();}
+  const handled = ["a","d","z","c","w","s","q","p"," ","arrowleft","arrowright","arrowup","arrowdown"].includes(key);
+  if(handled) e.preventDefault();
+
+  // キーボード + 十字キーの両方に対応
+  if(key==="a" || key==="arrowleft") move(-1);
+  else if(key==="d" || key==="arrowright") move(1);
+  else if(key==="z") rotate(-1);
+  else if(key==="c" || key==="arrowup") rotate(1);
+  else if(key==="s" || key==="arrowdown") softDrop();
+  else if(key==="w" || key===" ") hardDrop();
+  else if(key==="q") holdPiece();
+  else if(key==="p" && running){
+    paused=!paused;
+    if(paused) showMessage("PAUSED"); else clearMessage();
+  }
 });
 
 connect();
