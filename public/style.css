@@ -64,3 +64,9 @@ input:focus{border-color:#7180ff;box-shadow:0 0 0 3px #7180ff22}
 .card,.panel,#board{contain:layout paint;}
 
 .rematch-btn{position:absolute;z-index:3;left:50%;top:calc(50% + 58px);transform:translateX(-50%);padding:10px 24px;border:1px solid #6d83b8;border-radius:10px;background:#182641;color:#fff;font-weight:900;cursor:pointer}.rematch-btn:hover{filter:brightness(1.2)}
+
+.battle-hint{font-size:10px;color:#71809f;text-align:center;margin-top:8px}
+.opponent-board{display:block;width:100%;height:auto;aspect-ratio:1/2;background:#060a13;border:1px solid #263452;border-radius:8px;margin-top:8px}
+.opponent.dead .opponent-board{opacity:.45;filter:grayscale(.8)}
+.opponent.spectate-target{border-color:#8a76ff;box-shadow:0 0 0 2px #8a76ff22}
+.spectate-label{font-size:9px;color:#a994ff;margin-top:5px}
