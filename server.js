@@ -90,6 +90,8 @@ function joinRoom(ws, room, name) {
   ws.score = 0;
   ws.lines = 0;
   ws.alive = true;
+  ws.board = [];
+  ws.current = null;
 
   room.players.push(ws);
   if (!room.host) room.host = ws.id;
@@ -156,6 +158,8 @@ wss.on("connection", ws => {
   ws.score = 0;
   ws.lines = 0;
   ws.alive = true;
+  ws.board = [];
+  ws.current = null;
   ws.isAlive = true;
 
   send(ws, { type: "connected" });
@@ -208,6 +212,19 @@ wss.on("connection", ws => {
       broadcast(room, { type: "game_start", room: room.code });
 
       return broadcast(room, roomState(room));
+    }
+
+    if (type === "board_state") {
+      if (!room.started) return;
+      const safeBoard = Array.isArray(msg.board) ? msg.board.slice(0, 20).map(row => Array.isArray(row) ? row.slice(0, 10).map(v => Number.isFinite(Number(v)) ? Number(v) : 0) : Array(10).fill(0)) : [];
+      const cur = msg.current && Array.isArray(msg.current.shape) ? {
+        shape: msg.current.shape.slice(0,4).map(row => Array.isArray(row) ? row.slice(0,4).map(Boolean) : []),
+        x: Number(msg.current.x)||0, y: Number(msg.current.y)||0, color: Number(msg.current.color)||1
+      } : null;
+      ws.board = safeBoard;
+      ws.current = cur;
+      for (const p of room.players) if (p !== ws && p.alive) send(p, { type:"board_state", id:ws.id, board:safeBoard, current:cur });
+      return;
     }
 
     if (type === "score") {

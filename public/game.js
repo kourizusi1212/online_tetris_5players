@@ -23,6 +23,7 @@ let myId = "";
 let roomCode = "";
 let host = false;
 let players = new Map();
+let lastBoardSync = 0;
 
 let board = [];
 let current = null;
@@ -282,12 +283,21 @@ function loop(t){
     if(fallTimer >= interval){ softDrop(); fallTimer = 0; }
   }
 
+  syncBoard(t);
+
   if(drawDirty && t-lastRender >= 16){
     draw();
     drawDirty = false;
     lastRender = t;
   }
   requestAnimationFrame(loop);
+}
+
+function syncBoard(now=performance.now(), force=false){
+  if(!running || gameOver || !ws || ws.readyState!==WebSocket.OPEN) return;
+  if(!force && now-lastBoardSync<80) return;
+  lastBoardSync=now;
+  send({type:"board_state", board:board, current: current ? {shape:current.shape,x:current.x,y:current.y,color:current.color}:null});
 }
 
 function send(obj){
@@ -363,10 +373,17 @@ function handleMessage(m){
       $("gameScreen").classList.remove("hidden");
       $("gameRoomLabel").textContent=`ROOM ${roomCode}`;
       clearMessage();
+      lastBoardSync=0;
+      syncBoard(performance.now(),true);
       break;
     case "player_update":{
       const p=players.get(m.id);
       if(p){Object.assign(p,m);renderLobby();renderGamePlayers();}
+      break;
+    }
+    case "board_state": {
+      const p=players.get(m.id);
+      if(p){ p.board=Array.isArray(m.board)?m.board:p.board; p.current=m.current||null; renderGamePlayers(); }
       break;
     }
     case "garbage":
@@ -397,20 +414,47 @@ function renderLobby(){
   $("readyBtn").classList.toggle("off",!!me?.ready);
   $("lobbyStartBtn").classList.toggle("hidden",!host);
 }
+function drawOpponentBoard(canvas, p){
+  const c = canvas.getContext("2d");
+  const bw = 10, bh = 20;
+  const size = Math.floor(Math.min(canvas.width / bw, canvas.height / bh));
+  const ox = Math.floor((canvas.width - bw*size)/2);
+  const oy = Math.floor((canvas.height - bh*size)/2);
+  c.clearRect(0,0,canvas.width,canvas.height);
+  c.fillStyle="#060a13"; c.fillRect(0,0,canvas.width,canvas.height);
+  c.strokeStyle="rgba(255,255,255,.08)"; c.lineWidth=1;
+  for(let x=0;x<=bw;x++){c.beginPath();c.moveTo(ox+x*size+.5,oy);c.lineTo(ox+x*size+.5,oy+bh*size);c.stroke();}
+  for(let y=0;y<=bh;y++){c.beginPath();c.moveTo(ox,oy+y*size+.5);c.lineTo(ox+bw*size,oy+y*size+.5);c.stroke();}
+  const b=Array.isArray(p.board)?p.board:[];
+  for(let y=0;y<Math.min(bh,b.length);y++) for(let x=0;x<bw;x++) if(b[y]&&b[y][x]) drawCellMini(c,ox+x*size,oy+y*size,size,b[y][x]);
+  const cur=p.current;
+  if(cur && Array.isArray(cur.shape)){
+    cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
+      if(v && cur.y+y>=0) drawCellMini(c,ox+(cur.x+x)*size,oy+(cur.y+y)*size,size,cur.color);
+    }));
+  }
+}
+function drawCellMini(c,x,y,size,color){
+  c.fillStyle=COLORS[color-1]||"#777";
+  c.fillRect(x+1,y+1,size-2,size-2);
+  c.fillStyle="rgba(255,255,255,.18)";
+  c.fillRect(x+3,y+3,Math.max(1,size-6),Math.max(2,Math.floor(size*.15)));
+}
+
 function renderGamePlayers(){
   const list=$("gamePlayers");
   list.innerHTML="";
   for(const p of players.values()){
     const el=document.createElement("div");
     el.className="opponent"+(p.id===myId?" me":"");
-    const alive = p.alive !== false;
-    const progress = Math.min(100,(p.lines||0)%10*10);
+    const alive=p.alive!==false;
     el.innerHTML=`
       <div class="opponent-top"><div class="opponent-name">${escapeHtml(p.name)}${p.id===myId?" ★":""}</div>
       <div class="opponent-status ${alive?"":"dead"}">${alive?"PLAYING":"OUT"}</div></div>
-      <div class="opponent-stats">SCORE ${Number(p.score||0).toLocaleString()}　LINES ${p.lines||0}</div>
-      <div class="meter"><i style="width:${progress}%"></i></div>`;
+      <canvas class="opponent-board" width="120" height="240"></canvas>
+      <div class="opponent-stats">SCORE ${Number(p.score||0).toLocaleString()}　LINES ${p.lines||0}</div>`;
     list.appendChild(el);
+    drawOpponentBoard(el.querySelector("canvas"),p);
   }
 }
 function escapeHtml(s){
