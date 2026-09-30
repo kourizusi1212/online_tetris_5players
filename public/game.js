@@ -23,8 +23,6 @@ let myId = "";
 let roomCode = "";
 let host = false;
 let players = new Map();
-let remoteBoards = new Map();
-let spectateId = null;
 
 let board = [];
 let current = null;
@@ -40,7 +38,6 @@ let clearingRows = [];
 let clearAnimStart = 0;
 let clearAnimDuration = 260;
 let pendingCleared = 0;
-let lastBoardSend = 0;
 
 function emptyBoard(){ return Array.from({length:H}, () => Array(W).fill(0)); }
 function cloneShape(shape){ return shape.map(r => r.slice()); }
@@ -54,8 +51,6 @@ function takeNext(){
   return p;
 }
 function resetGame(){
-  remoteBoards.clear();
-  spectateId=null;
   board = emptyBoard();
   score = 0; lines = 0; level = 1;
   next = randomPiece();
@@ -249,8 +244,6 @@ function draw(){
   if(current && !clearingRows.length) current.shape.forEach((row,y)=>row.forEach((v,x)=>{if(v)drawCell(ctx,current.x+x,current.y+y,current.color)}));
 
   // ライン消去演出：点滅→白い光が広がる
-  broadcastBoardState(t);
-
   if(clearingRows.length){
     const elapsed = performance.now() - clearAnimStart;
     const progress = Math.min(1, elapsed / clearAnimDuration);
@@ -364,18 +357,12 @@ function handleMessage(m){
       break;
     }
     case "game_start":
-      remoteBoards.clear();
-      spectateId=null;
       resetGame();
       running=true;
       $("lobbyScreen").classList.add("hidden");
       $("gameScreen").classList.remove("hidden");
       $("gameRoomLabel").textContent=`ROOM ${roomCode}`;
       clearMessage();
-      break;
-    case "board_state":
-      remoteBoards.set(m.id,{board:m.board||[],current:m.current||null,clearing:!!m.clearing});
-      if($("gamePlayers")) renderGamePlayers();
       break;
     case "player_update":{
       const p=players.get(m.id);
@@ -415,44 +402,16 @@ function renderGamePlayers(){
   list.innerHTML="";
   for(const p of players.values()){
     const el=document.createElement("div");
+    el.className="opponent"+(p.id===myId?" me":"");
     const alive = p.alive !== false;
     const progress = Math.min(100,(p.lines||0)%10*10);
-    el.className="opponent"+(p.id===myId?" me":"")+(!alive?" dead":"")+(spectateId===p.id?" spectate-target":"");
-    const boardId = `mini-${p.id}`;
     el.innerHTML=`
       <div class="opponent-top"><div class="opponent-name">${escapeHtml(p.name)}${p.id===myId?" ★":""}</div>
       <div class="opponent-status ${alive?"":"dead"}">${alive?"PLAYING":"OUT"}</div></div>
-      <canvas id="${boardId}" class="opponent-board" width="150" height="300"></canvas>
       <div class="opponent-stats">SCORE ${Number(p.score||0).toLocaleString()}　LINES ${p.lines||0}</div>
-      <div class="meter"><i style="width:${progress}%"></i></div>
-      ${(!alive && p.id!==myId)?'<div class="spectate-label">クリックで観戦</div>':''}`;
-    if(!alive && p.id!==myId){
-      el.onclick=()=>{ spectateId=p.id; renderGamePlayers(); };
-    }
+      <div class="meter"><i style="width:${progress}%"></i></div>`;
     list.appendChild(el);
-    drawRemoteBoard($(boardId), remoteBoards.get(p.id));
   }
-}
-function drawRemoteBoard(canvas, state){
-  if(!canvas) return;
-  const c=canvas.getContext("2d");
-  const bw=150,bh=300,size=15;
-  c.clearRect(0,0,bw,bh);
-  c.fillStyle="#060a13"; c.fillRect(0,0,bw,bh);
-  if(!state) return;
-  const b=state.board||[];
-  for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(b[y]?.[x]) drawCell(c,x,y,b[y][x],size);
-  if(state.current && !state.clearing){
-    const cur=state.current;
-    cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
-      if(v) drawCell(c,cur.x+x,cur.y+y,cur.color,size);
-    }));
-  }
-}
-function broadcastBoardState(t){
-  if(!running || gameOver || t-lastBoardSend<80) return;
-  lastBoardSend=t;
-  send({type:"board_state", board:board, current:current ? {shape:current.shape,color:current.color,x:current.x,y:current.y}:null, clearing:Boolean(clearingRows.length)});
 }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

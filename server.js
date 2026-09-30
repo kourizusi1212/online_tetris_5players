@@ -45,7 +45,6 @@ function publicPlayer(p, room) {
     score: p.score,
     lines: p.lines,
     alive: p.alive,
-    board: p.board || null,
     ready: room.ready.has(p.id),
     host: room.host === p.id
   };
@@ -91,7 +90,6 @@ function joinRoom(ws, room, name) {
   ws.score = 0;
   ws.lines = 0;
   ws.alive = true;
-  ws.board = null;
 
   room.players.push(ws);
   if (!room.host) room.host = ws.id;
@@ -205,21 +203,9 @@ wss.on("connection", ws => {
         return send(ws, { type: "error", message: "参加者全員をREADYにしてください。" });
       }
       room.started = true;
-      room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; p.board = null; p.current = null; p.clearing = false; });
+      room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; });
       broadcast(room, { type: "game_start" });
       return broadcast(room, roomState(room));
-    }
-
-    if (type === "board_state") {
-      if (!room.started) return;
-      if (!Array.isArray(msg.board) || msg.board.length !== 20) return;
-      ws.board = msg.board.map(row => Array.isArray(row) ? row.slice(0,10) : Array(10).fill(0));
-      ws.current = msg.current || null;
-      ws.clearing = Boolean(msg.clearing);
-      for (const p of room.players) {
-        if (p !== ws) send(p, { type:"board_state", id:ws.id, board:ws.board, current:ws.current, clearing:ws.clearing });
-      }
-      return;
     }
 
     if (type === "score") {
@@ -268,7 +254,7 @@ wss.on("connection", ws => {
       if (room.started) return;
       room.winnerId = null;
       room.ready.clear();
-      room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; p.board = null; p.current = null; p.clearing = false; });
+      room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; });
       return broadcast(room, roomState(room));
     }
 
