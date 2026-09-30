@@ -444,7 +444,9 @@ function drawCellMini(c,x,y,size,color){
 function renderGamePlayers(){
   const list=$("gamePlayers");
   list.innerHTML="";
+  // 右側には自分自身を表示せず、対戦相手だけを表示する
   for(const p of players.values()){
+    if(p.id===myId) continue;
     const el=document.createElement("div");
     el.className="opponent"+(p.id===myId?" me":"");
     const alive=p.alive!==false;
