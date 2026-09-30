@@ -25,7 +25,6 @@ let host = false;
 let players = new Map();
 let remoteBoards = new Map();
 let spectateId = null;
-let serverGameStarted = false;
 
 let board = [];
 let current = null;
@@ -343,13 +342,12 @@ function handleMessage(m){
       break;
     case "room_state":
       roomCode=m.room || roomCode;
-      serverGameStarted = !!m.started;
       players.clear();
       (m.players||[]).forEach(p=>players.set(p.id,p));
       host = players.get(myId)?.host === true;
       renderLobby();
       renderGamePlayers();
-      if(!m.started && !serverGameStarted && !$("gameScreen").classList.contains("hidden")){
+      if(!m.started && !$("gameScreen").classList.contains("hidden")){
         $("gameScreen").classList.add("hidden");
         $("lobbyScreen").classList.remove("hidden");
         running=false;
@@ -358,7 +356,6 @@ function handleMessage(m){
     case "host_changed":
       break;
     case "game_winner": {
-      serverGameStarted = false;
       gameOver = true;
       running = false;
       const isWinner = m.winnerId === myId;
@@ -367,7 +364,6 @@ function handleMessage(m){
       break;
     }
     case "game_start":
-      serverGameStarted = true;
       remoteBoards.clear();
       spectateId=null;
       resetGame();
@@ -379,7 +375,7 @@ function handleMessage(m){
       break;
     case "board_state":
       remoteBoards.set(m.id,{board:m.board||[],current:m.current||null,clearing:!!m.clearing});
-      updateRemoteBoardCanvas(m.id);
+      if($("gamePlayers")) renderGamePlayers();
       break;
     case "player_update":{
       const p=players.get(m.id);
@@ -413,10 +409,6 @@ function renderLobby(){
   $("readyBtn").textContent=me?.ready ? "READYを解除" : "READY";
   $("readyBtn").classList.toggle("off",!!me?.ready);
   $("lobbyStartBtn").classList.toggle("hidden",!host);
-}
-function updateRemoteBoardCanvas(id){
-  const canvas = $("mini-" + id);
-  if(canvas) drawRemoteBoard(canvas, remoteBoards.get(id));
 }
 function renderGamePlayers(){
   const list=$("gamePlayers");
