@@ -35,6 +35,7 @@ let running = false, gameOver = false, paused = false;
 let lastTime = 0, fallTimer = 0;
 let reconnectTimer = null;
 let intentionalClose = false;
+let gameMode = "select";
 let clearingRows = [];
 let clearAnimStart = 0;
 let clearAnimDuration = 260;
@@ -60,6 +61,7 @@ function resetGame(){
   running = false; gameOver = false; paused = false;
   $("gameMessage").classList.add("hidden");
   $("rematchBtn").classList.add("hidden");
+  $("rematchBtn").textContent = gameMode === "single" ? "もう一度プレイ" : "再戦する";
   updateHud(); draw();
 }
 function collision(p, dx=0, dy=0, shape=p.shape){
@@ -164,8 +166,10 @@ function finishLineClear(){
   const points = [0,100,300,500,800][cleared] || 800;
   score += points * level;
   level = Math.floor(lines / 10) + 1;
-  send({type:"score",score,lines});
-  send({type:"garbage",lines:Math.min(4,cleared)});
+  if(gameMode === "online") {
+    send({type:"score",score,lines});
+    send({type:"garbage",lines:Math.min(4,cleared)});
+  }
   spawnNextPiece();
   updateHud();
 }
@@ -187,9 +191,14 @@ function addGarbage(count){
 }
 function finishGame(){
   gameOver = true; running = false;
-  showMessage("GAME OVER");
-  send({type:"alive",alive:false});
-  send({type:"score",score,lines});
+  showMessage(gameMode === "single" ? "GAME OVER" : "GAME OVER");
+  if(gameMode === "online") {
+    send({type:"alive",alive:false});
+    send({type:"score",score,lines});
+  } else {
+    $("rematchBtn").textContent = "もう一度プレイ";
+    $("rematchBtn").classList.remove("hidden");
+  }
 }
 function showMessage(text){
   const el = $("gameMessage");
@@ -294,6 +303,7 @@ function loop(t){
 }
 
 function syncBoard(now=performance.now(), force=false){
+  if(gameMode !== "online") return;
   if(!running || gameOver || !ws || ws.readyState!==WebSocket.OPEN) return;
   if(!force && now-lastBoardSync<80) return;
   lastBoardSync=now;
@@ -306,6 +316,41 @@ function send(obj){
 function setStatus(text, good=false){
   $("connectionStatus").textContent = text;
   $("connectionStatus").classList.toggle("good",good);
+}
+function enterSingleMode(){
+  gameMode = "single";
+  $("modeScreen").classList.add("hidden");
+  $("lobbyScreen").classList.add("hidden");
+  $("gameScreen").classList.remove("hidden");
+  $("gameRoomLabel").textContent = "SINGLE PLAYER";
+  $("backBtn").textContent = "モード選択へ";
+  $("rematchBtn").textContent = "もう一度プレイ";
+  resetGame();
+  running = true;
+  clearMessage();
+}
+function enterOnlineMode(){
+  gameMode = "online";
+  $("modeScreen").classList.add("hidden");
+  $("gameScreen").classList.add("hidden");
+  $("lobbyScreen").classList.remove("hidden");
+  $("backBtn").textContent = "ロビーへ戻る";
+  setStatus("オンラインモード");
+}
+function returnToModeSelect(){
+  if(gameMode === "online" && ws && ws.readyState === WebSocket.OPEN && roomCode){
+    intentionalClose=true;
+    send({type:"leave"});
+  }
+  gameMode="select"; roomCode=""; host=false; players.clear(); running=false; gameOver=false;
+  $("gameScreen").classList.add("hidden");
+  $("lobbyScreen").classList.add("hidden");
+  $("modeScreen").classList.remove("hidden");
+  $("roomPanel").classList.add("hidden");
+  $("roomCode").textContent="----";
+  $("countLabel").textContent="0 / 5";
+  $("lobbyPlayers").innerHTML="";
+  setStatus("オンラインを選ぶとサーバーに接続します。");
 }
 function connect(){
   if(ws && (ws.readyState===WebSocket.OPEN || ws.readyState===WebSocket.CONNECTING)) return;
@@ -334,6 +379,7 @@ function connect(){
   };
 }
 function handleMessage(m){
+  if(gameMode !== "online" && m.type !== "connected") return;
   switch(m.type){
     case "connected": break;
     case "joined":
@@ -464,12 +510,14 @@ function escapeHtml(s){
 }
 function name(){return $("nameInput").value.trim().slice(0,16)||"Player";}
 function createRoom(){
+  if(gameMode !== "online") return;
   if(!ws || ws.readyState!==WebSocket.OPEN) return setStatus("サーバーへ接続中です。少し待ってください。");
   const requested=$("roomInput").value.replace(/\D/g,"").slice(0,4);
   send({type:"create",room:requested,name:name()});
   setStatus("ルームを作成しています…");
 }
 function joinRoom(){
+  if(gameMode !== "online") return;
   if(!ws || ws.readyState!==WebSocket.OPEN) return setStatus("サーバーへ接続中です。少し待ってください。");
   const code=$("roomInput").value.replace(/\D/g,"").slice(0,4);
   $("roomInput").value=code;
@@ -482,12 +530,14 @@ function leave(){
   send({type:"leave"});
   setTimeout(()=>location.reload(),100);
 }
+$("singleModeBtn").onclick=enterSingleMode;
+$("onlineModeBtn").onclick=()=>{ enterOnlineMode(); connect(); };
 $("createBtn").onclick=createRoom;
 $("joinBtn").onclick=joinRoom;
 $("readyBtn").onclick=()=>send({type:"ready"});
 $("lobbyStartBtn").onclick=()=>send({type:"start"});
-$("rematchBtn").onclick=()=>send({type:"restart"});
-$("backBtn").onclick=leave;
+$("rematchBtn").onclick=()=>{ if(gameMode === "single"){ enterSingleMode(); } else send({type:"restart"}); };
+$("backBtn").onclick=()=>{ if(gameMode === "online" && roomCode) { leave(); } else returnToModeSelect(); };
 $("copyBtn").onclick=async()=>{
   try{
     await navigator.clipboard.writeText(roomCode);
@@ -522,7 +572,6 @@ document.addEventListener("keydown",e=>{
   }
 });
 
-connect();
 resetGame();
 requestAnimationFrame(loop);
 })();

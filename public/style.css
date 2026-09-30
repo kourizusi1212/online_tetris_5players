@@ -73,3 +73,5 @@ input:focus{border-color:#7180ff;box-shadow:0 0 0 3px #7180ff22}
 @keyframes startPulse{0%,100%{box-shadow:0 0 0 0 rgba(101,115,255,0)}50%{box-shadow:0 0 0 5px rgba(101,115,255,.10)}}
 
 .opponent-board{display:block;width:120px;height:240px;margin:8px auto;border:1px solid rgba(255,255,255,.12);background:#060a13;}
+
+.mode-card{text-align:center}.mode-buttons{display:grid;gap:12px;margin-top:22px}.mode-btn{height:56px;border-radius:14px;background:#2b3756;font-size:16px}.mode-btn.primary{background:linear-gradient(135deg,#6573ff,#835cff)}.mode-hint{color:#7f8cab;font-size:11px;line-height:1.7;margin-top:18px}

@@ -7,6 +7,18 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<div id="modeScreen" class="screen">
+  <div class="card mode-card">
+    <div class="logo">ONLINE <span>TETRIS</span></div>
+    <p class="subtitle">プレイモードを選択してください</p>
+    <div class="mode-buttons">
+      <button id="singleModeBtn" class="mode-btn primary">一人でプレイ</button>
+      <button id="onlineModeBtn" class="mode-btn">オンライン</button>
+    </div>
+    <p class="mode-hint">一人でプレイ：すぐにゲームを開始します<br>オンライン：ルームを作って最大5人で対戦します</p>
+  </div>
+</div>
+
 <div id="lobbyScreen" class="screen">
   <div class="card lobby-card">
     <div class="logo">ONLINE <span>TETRIS</span></div>
@@ -48,7 +60,7 @@
   <header class="topbar">
     <div class="brand">ONLINE TETRIS 5</div>
     <div id="gameRoomLabel" class="room-label">ROOM ----</div>
-    <button id="backBtn" class="small-btn">ロビーへ戻る</button>
+    <button id="backBtn" class="small-btn">モード選択へ</button>
   </header>
 
   <main class="game-layout">
