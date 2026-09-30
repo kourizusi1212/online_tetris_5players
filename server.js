@@ -203,8 +203,10 @@ wss.on("connection", ws => {
         return send(ws, { type: "error", message: "参加者全員をREADYにしてください。" });
       }
       room.started = true;
+      room.winnerId = null;
       room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; });
-      broadcast(room, { type: "game_start" });
+      broadcast(room, { type: "game_start", room: room.code });
+
       return broadcast(room, roomState(room));
     }
 
@@ -254,6 +256,7 @@ wss.on("connection", ws => {
       if (room.started) return;
       room.winnerId = null;
       room.ready.clear();
+      room.started = false;
       room.players.forEach(p => { p.score = 0; p.lines = 0; p.alive = true; });
       return broadcast(room, roomState(room));
     }
