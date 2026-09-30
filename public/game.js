@@ -33,6 +33,8 @@ let canHold = true;
 let score = 0, lines = 0, level = 1;
 let running = false, gameOver = false, paused = false;
 let lastTime = 0, fallTimer = 0;
+let lockTimer = 0;
+const LOCK_DELAY = 750;
 let reconnectTimer = null;
 let intentionalClose = false;
 let gameMode = "select";
@@ -58,6 +60,7 @@ function resetGame(){
   next = randomPiece();
   hold = null; canHold = true;
   current = takeNext();
+  lockTimer = 0;
   running = false; gameOver = false; paused = false;
   $("gameMessage").classList.add("hidden");
   $("rematchBtn").classList.add("hidden");
@@ -100,8 +103,13 @@ function rotate(dir){
 }
 function softDrop(){
   if(!running || paused || gameOver) return;
-  if(!collision(current,0,1)){ current.y++; score++; requestDraw(); }
-  else lockPiece();
+  if(!collision(current,0,1)){
+    current.y++;
+    score++;
+    lockTimer = 0;
+    requestDraw();
+  }
+  // 地面に触れた瞬間には固定せず、0.75秒のロック待ちを開始
   updateHud();
 }
 function hardDrop(){
@@ -109,6 +117,7 @@ function hardDrop(){
   let distance = 0;
   while(!collision(current,0,1)){ current.y++; distance++; }
   score += distance * 2;
+  lockTimer = 0;
   lockPiece();
   updateHud();
 }
@@ -150,6 +159,7 @@ function lockPiece(){
 }
 function spawnNextPiece(){
   current = takeNext();
+  lockTimer = 0;
   canHold = true;
   requestDraw();
   if(collision(current)) finishGame();
@@ -289,7 +299,27 @@ function loop(t){
   } else if(running && !paused && !gameOver){
     fallTimer += dt;
     const interval = Math.max(75, 800 - (level-1)*60);
-    if(fallTimer >= interval){ softDrop(); fallTimer = 0; }
+    if(fallTimer >= interval){
+      fallTimer = 0;
+      if(!collision(current,0,1)){
+        current.y++;
+        score++;
+        lockTimer = 0;
+        updateHud();
+      }
+    }
+
+    // ブロックが地面/積み上がったブロックに触れてから0.75秒後に固定
+    if(current && collision(current,0,1)){
+      lockTimer += dt;
+      if(lockTimer >= LOCK_DELAY){
+        lockTimer = 0;
+        lockPiece();
+      }
+    } else {
+      lockTimer = 0;
+    }
+    requestDraw();
   }
 
   syncBoard(t);
