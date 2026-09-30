@@ -1,1 +1,98 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5人オンラインテトリス</title><link rel="stylesheet" href="style.css"></head><body><main><h1>5人オンラインテトリス</h1><div class="bar"><button id="create">ルーム作成</button><input id="room" maxlength="5" placeholder="ルームコード"><button id="join">参加</button><button id="start">ゲーム開始</button><span id="status">未接続</span></div><div class="grid"><section><div class="info">スコア <b id="score">0</b>　ライン <b id="lines">0</b>　レベル <b id="level">1</b>　部屋 <b id="roomLabel">-</b></div><div class="game"><div><h3>自分</h3><canvas id="board" width="300" height="600"></canvas></div><div><h3>ホールド</h3><canvas id="hold" width="120" height="120"></canvas><h3>次</h3><canvas id="next" width="120" height="120"></canvas></div></div><p>A右 D左 Z左回転 C右回転 Sソフトドロップ W/Spaceハードドロップ Qホールド</p></section><aside><h2>相手の画面</h2><div id="opponents"></div></aside></div></main><script src="game.js"></script></body></html>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ONLINE TETRIS 5</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="lobbyScreen" class="screen">
+  <div class="card lobby-card">
+    <div class="logo">ONLINE <span>TETRIS</span></div>
+    <p class="subtitle">最大5人・リアルタイム対戦</p>
+
+    <label>プレイヤー名</label>
+    <input id="nameInput" maxlength="16" autocomplete="nickname" placeholder="名前を入力">
+
+    <label>ルームコード</label>
+    <input id="roomInput" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="4桁（参加時のみ）">
+
+    <div class="two-buttons">
+      <button id="createBtn" class="primary">ルームを作る</button>
+      <button id="joinBtn">ルームに参加</button>
+    </div>
+
+    <div id="connectionStatus" class="status">サーバーに接続中…</div>
+
+    <div id="roomPanel" class="room-panel hidden">
+      <div class="room-title">ROOM CODE</div>
+      <div id="roomCode" class="room-code">----</div>
+      <button id="copyBtn" class="copy-btn">コードをコピー</button>
+
+      <div class="panel-heading">
+        <span>参加者</span>
+        <span id="countLabel">0 / 5</span>
+      </div>
+      <div id="lobbyPlayers" class="player-list"></div>
+
+      <button id="readyBtn" class="ready-btn">READY</button>
+      <button id="lobbyStartBtn" class="start-btn hidden">ゲーム開始</button>
+
+      <div class="hint">2〜5人でプレイできます。全員READYになると部屋主が開始できます。</div>
+    </div>
+  </div>
+</div>
+
+<div id="gameScreen" class="hidden">
+  <header class="topbar">
+    <div class="brand">ONLINE TETRIS 5</div>
+    <div id="gameRoomLabel" class="room-label">ROOM ----</div>
+    <button id="backBtn" class="small-btn">ロビーへ戻る</button>
+  </header>
+
+  <main class="game-layout">
+    <aside class="left-column">
+      <div class="panel">
+        <h3>HOLD <span>Q</span></h3>
+        <canvas id="holdCanvas" width="140" height="100"></canvas>
+      </div>
+      <div class="panel">
+        <h3>NEXT</h3>
+        <canvas id="nextCanvas" width="140" height="100"></canvas>
+      </div>
+      <div class="panel stats">
+        <div><span>SCORE</span><b id="scoreValue">0</b></div>
+        <div><span>LINES</span><b id="linesValue">0</b></div>
+        <div><span>LEVEL</span><b id="levelValue">1</b></div>
+      </div>
+      <div class="panel controls">
+        <h3>操作</h3>
+        <p>A / D　左右移動</p>
+        <p>Z / C　左右回転</p>
+        <p>S　ソフトドロップ</p>
+        <p>W / SPACE　ハードドロップ</p>
+        <p>Q　ホールド</p>
+        <p>P　ポーズ</p>
+      </div>
+    </aside>
+
+    <section class="board-area">
+      <div id="gameMessage" class="game-message hidden"></div>
+      <button id="rematchBtn" class="rematch-btn hidden">再戦する</button>
+      <canvas id="board" width="300" height="600"></canvas>
+    </section>
+
+    <aside class="right-column">
+      <div class="panel opponents">
+        <div class="opponents-title">PLAYERS</div>
+        <div id="gamePlayers"></div>
+        <div class="battle-hint">自分の盤面＋相手の盤面</div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="/game.js"></script>
+</body>
+</html>

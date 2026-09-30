@@ -1,1 +1,9 @@
-{"name":"online-tetris-5players","version":"2.0.0","private":true,"scripts":{"start":"node server.js"},"dependencies":{"ws":"^8.18.0"}}
+{
+  "name": "online-tetris-5-rebuilt",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Online Tetris for up to 5 players",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

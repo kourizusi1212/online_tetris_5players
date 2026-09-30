@@ -1,33 +1,531 @@
-const W=10,H=20,S=30,C=["#00d9ff","#3b82f6","#f59e0b","#fde047","#22c55e","#a855f7","#ef4444"],SH=[[[1,1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[1,1],[1,1]],[[0,1,1],[1,1,0]],[[0,1,0],[1,1,1]],[[1,1,0],[0,1,1]]];
-let ws,id,board=blank(),cur,next,hold,canHold=true,score=0,lines=0,level=1,alive=true,fall=800,last=0,ops=new Map();
-const cv=document.getElementById("board"),ctx=cv.getContext("2d"),hc=document.getElementById("hold"),hctx=hc.getContext("2d"),nc=document.getElementById("next"),nctx=nc.getContext("2d");
-function blank(){return Array.from({length:H},()=>Array(W).fill(0))}
-function piece(){let t=Math.floor(Math.random()*7);return{type:t,shape:SH[t].map(r=>r.slice()),x:3,y:-1}}
-function roomCode(){let s="",a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s}
-function connect(code){if(ws)try{ws.close()}catch{};ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"//"+location.host);ws.onopen=()=>{ws.send(JSON.stringify({type:"join",room:code}));document.getElementById("status").textContent="接続中"};ws.onmessage=e=>{let m=JSON.parse(e.data);if(m.type==="joined"){id=m.id;document.getElementById("roomLabel").textContent=m.room;document.getElementById("status").textContent="ルーム "+m.room}else if(m.type==="start")reset();else if(m.type==="opponentState"&&m.from!==id){ops.set(m.from,m);renderOpp()}else if(m.type==="players"){m.players.filter(p=>p.id!==id).forEach(p=>{if(!ops.has(p.id))ops.set(p.id,{from:p.id,name:p.name,board:blank(),current:null,score:p.score,alive:p.alive})});for(const k of ops.keys())if(!m.players.some(p=>p.id===k))ops.delete(k);renderOpp()}else if(m.type==="garbage")garbage(m.amount);else if(m.type==="error")document.getElementById("status").textContent=m.message}}
-function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
-document.getElementById("create").onclick=()=>{let c=roomCode();document.getElementById("room").value=c;connect(c)}
-document.getElementById("join").onclick=()=>{let c=document.getElementById("room").value.trim().toUpperCase();if(c)connect(c)}
-document.getElementById("start").onclick=()=>send({type:"start"});
-function reset(){board=blank();cur=piece();next=piece();hold=null;canHold=true;score=lines=0;level=1;fall=800;alive=true;last=performance.now();draw();mini()}
-function rot(m,d){return d>0?m[0].map((_,i)=>m.map(r=>r[i]).reverse()):m[0].map((_,i)=>m.map(r=>r[m[0].length-1-i]))}
-function hit(p){for(let y=0;y<p.shape.length;y++)for(let x=0;x<p.shape[y].length;x++)if(p.shape[y][x]){let X=p.x+x,Y=p.y+y;if(X<0||X>=W||Y>=H)return true;if(Y>=0&&board[Y][X])return true}return false}
-function move(dx){if(!alive)return;cur.x+=dx;if(hit(cur))cur.x-=dx;draw();state()}
-function rotate(d){let old=cur.shape.map(r=>r.slice()),ox=cur.x;cur.shape=rot(cur.shape,d);for(let k of[0,-1,1,-2,2]){cur.x=ox+k;if(!hit(cur)){draw();state();return}}cur.shape=old;cur.x=ox}
-function drop(){if(!alive)return;cur.y++;if(hit(cur)){cur.y--;lock()}else score++;info();draw();state()}
-function hard(){if(!alive)return;let n=0;while(!hit(cur)){cur.y++;n++}cur.y--;score+=2*n;lock();info();draw();state()}
-function ghost(p){let g={x:p.x,y:p.y,shape:p.shape.map(r=>r.slice()),type:p.type};while(!hit(g))g.y++;g.y--;return g}
-function lock(){for(let y=0;y<cur.shape.length;y++)for(let x=0;x<cur.shape[y].length;x++)if(cur.shape[y][x]){let Y=cur.y+y,X=cur.x+x;if(Y<0)return over();board[Y][X]=cur.type+1}let n=0;for(let y=H-1;y>=0;y--)if(board[y].every(Boolean)){board.splice(y,1);board.unshift(Array(W).fill(0));n++;y++}if(n){score+=[0,100,300,500,800][n]*level;lines+=n;level=1+Math.floor(lines/10);fall=Math.max(90,800-(level-1)*65);if(n>1)send({type:"garbage",amount:n-1})}cur=next;cur.x=3;cur.y=-1;next=piece();canHold=true;if(hit(cur))over();mini()}
-function over(){alive=false;send({type:"gameover"});document.getElementById("status").textContent="GAME OVER"}
-function garbage(n){for(let i=0;i<n;i++){board.shift();let h=Math.floor(Math.random()*W),r=Array(W).fill(8);r[h]=0;board.push(r)}draw();state()}
-function holdIt(){if(!alive||!canHold)return;canHold=false;if(!hold){hold=cur;cur=next;next=piece()}else{let t=hold;hold=cur;cur=t}cur.x=3;cur.y=-1;mini();draw();state()}
-function info(){scoreEl.textContent=score;linesEl.textContent=lines;levelEl.textContent=level}
-const scoreEl=document.getElementById("score"),linesEl=document.getElementById("lines"),levelEl=document.getElementById("level");
-function draw(){ctx.clearRect(0,0,300,600);ctx.strokeStyle="#172033";for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*S,0);ctx.lineTo(x*S,600);ctx.stroke()}for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*S);ctx.lineTo(300,y*S);ctx.stroke()}for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(board[y][x])cell(ctx,x,y,C[board[y][x]-1],1);if(cur){let g=ghost(cur);for(let y=0;y<g.shape.length;y++)for(let x=0;x<g.shape[y].length;x++)if(g.shape[y][x]&&g.y+y>=0)cell(ctx,g.x+x,g.y+y,C[cur.type],.2);for(let y=0;y<cur.shape.length;y++)for(let x=0;x<cur.shape[y].length;x++)if(cur.shape[y][x]&&cur.y+y>=0)cell(ctx,cur.x+x,cur.y+y,C[cur.type],1)}}
-function cell(c,x,y,col,a){c.save();c.globalAlpha=a;c.fillStyle=col;c.fillRect(x*S+1,y*S+1,S-2,S-2);c.restore()}
-function mini(){drawMini(hctx,hold);drawMini(nctx,next)}function drawMini(c,p){c.clearRect(0,0,120,120);if(!p)return;let z=24,ox=(120-p.shape[0].length*z)/2,oy=(120-p.shape.length*z)/2;c.fillStyle=C[p.type];for(let y=0;y<p.shape.length;y++)for(let x=0;x<p.shape[y].length;x++)if(p.shape[y][x])c.fillRect(ox+x*z+1,oy+y*z+1,z-2,z-2)}
-function state(){if(cur)send({type:"state",board:board,current:{type:cur.type,shape:cur.shape,x:cur.x,y:cur.y},score,lines,alive})}
-function renderOpp(){let box=document.getElementById("opponents");box.innerHTML="";for(let st of ops.values()){let d=document.createElement("div");d.className="opp";let h=document.createElement("div");h.textContent=(st.name||"Player")+" "+(st.alive===false?"☠":"●")+" "+(st.score||0);let c=document.createElement("canvas");c.width=150;c.height=300;d.append(h,c);box.append(d);drawOpp(c,st)}}
-function drawOpp(c,st){let q=c.getContext("2d"),z=15;q.clearRect(0,0,150,300);for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(st.board?.[y]?.[x]){q.fillStyle=C[st.board[y][x]-1]||"#888";q.fillRect(x*z+1,y*z+1,z-2,z-2)}if(!st.current)return;let p={...st.current,shape:st.current.shape.map(r=>r.slice())},hit2=t=>{for(let y=0;y<t.shape.length;y++)for(let x=0;x<t.shape[y].length;x++)if(t.shape[y][x]){let X=t.x+x,Y=t.y+y;if(X<0||X>=W||Y>=H)return true;if(Y>=0&&st.board[Y][X])return true}return false};let g={...p};while(!hit2(g))g.y++;g.y--;for(let y=0;y<g.shape.length;y++)for(let x=0;x<g.shape[y].length;x++)if(g.shape[y][x]&&g.y+y>=0){q.globalAlpha=.2;q.fillStyle=C[g.type];q.fillRect((g.x+x)*z+1,(g.y+y)*z+1,z-2,z-2);q.globalAlpha=1}for(let y=0;y<p.shape.length;y++)for(let x=0;x<p.shape[y].length;x++)if(p.shape[y][x]&&p.y+y>=0){q.fillStyle=C[p.type];q.fillRect((p.x+x)*z+1,(p.y+y)*z+1,z-2,z-2)}}
-document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;let k=e.key.toLowerCase();if(["a","d","z","c","s","q","w"," "].includes(k))e.preventDefault();if(k==="a")move(1);else if(k==="d")move(-1);else if(k==="z")rotate(-1);else if(k==="c")rotate(1);else if(k==="s")drop();else if(k==="w"||k===" ")hard();else if(k==="q")holdIt()});
-function loop(t){if(alive&&cur&&t-last>=fall){drop();last=t}draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+(() => {
+"use strict";
+
+const W = 10, H = 20, CELL = 30;
+const COLORS = ["#26d8ee","#5472ff","#ff9e42","#ffe04a","#38d879","#ae62ff","#ff5878","#777"];
+const SHAPES = [
+  [[1,1,1,1]],
+  [[1,0,0],[1,1,1]],
+  [[0,0,1],[1,1,1]],
+  [[1,1],[1,1]],
+  [[0,1,1],[1,1,0]],
+  [[0,1,0],[1,1,1]],
+  [[1,1,0],[0,1,1]]
+];
+
+const $ = id => document.getElementById(id);
+const boardCanvas = $("board"), ctx = boardCanvas.getContext("2d");
+const nextCanvas = $("nextCanvas"), nctx = nextCanvas.getContext("2d");
+const holdCanvas = $("holdCanvas"), hctx = holdCanvas.getContext("2d");
+
+let ws = null;
+let myId = "";
+let roomCode = "";
+let host = false;
+let players = new Map();
+let remoteBoards = new Map();
+let spectateId = null;
+let serverGameStarted = false;
+
+let board = [];
+let current = null;
+let next = null;
+let hold = null;
+let canHold = true;
+let score = 0, lines = 0, level = 1;
+let running = false, gameOver = false, paused = false;
+let lastTime = 0, fallTimer = 0;
+let reconnectTimer = null;
+let intentionalClose = false;
+let clearingRows = [];
+let clearAnimStart = 0;
+let clearAnimDuration = 260;
+let pendingCleared = 0;
+let lastBoardSend = 0;
+
+function emptyBoard(){ return Array.from({length:H}, () => Array(W).fill(0)); }
+function cloneShape(shape){ return shape.map(r => r.slice()); }
+function randomPiece(){
+  const i = Math.floor(Math.random() * SHAPES.length);
+  return { shape: cloneShape(SHAPES[i]), color: i + 1, x: 3, y: 0 };
+}
+function takeNext(){
+  const p = next || randomPiece();
+  next = randomPiece();
+  return p;
+}
+function resetGame(){
+  remoteBoards.clear();
+  spectateId=null;
+  board = emptyBoard();
+  score = 0; lines = 0; level = 1;
+  next = randomPiece();
+  hold = null; canHold = true;
+  current = takeNext();
+  running = false; gameOver = false; paused = false;
+  $("gameMessage").classList.add("hidden");
+  $("rematchBtn").classList.add("hidden");
+  updateHud(); draw();
+}
+function collision(p, dx=0, dy=0, shape=p.shape){
+  for(let y=0;y<shape.length;y++){
+    for(let x=0;x<shape[y].length;x++){
+      if(!shape[y][x]) continue;
+      const nx = p.x + x + dx, ny = p.y + y + dy;
+      if(nx < 0 || nx >= W || ny >= H) return true;
+      if(ny >= 0 && board[ny][nx]) return true;
+    }
+  }
+  return false;
+}
+function move(dx){
+  if(!running || paused || gameOver) return;
+  if(!collision(current,dx,0)){ current.x += dx; requestDraw(); }
+}
+function rotate(dir){
+  if(!running || paused || gameOver) return;
+  const old = cloneShape(current.shape);
+  const m = current.shape;
+  let rotated;
+  if(dir > 0) rotated = m[0].map((_,i) => m.map(row => row[i]).reverse());
+  else rotated = m[0].map((_,i) => m.map(row => row[m[0].length-1-i]));
+  current.shape = rotated;
+  if(collision(current)){
+    let fixed = false;
+    for(const kick of [-1,1,-2,2]){
+      current.x += kick;
+      if(!collision(current)){ fixed = true; break; }
+      current.x -= kick;
+    }
+    if(!fixed) current.shape = old;
+  }
+  requestDraw();
+}
+function softDrop(){
+  if(!running || paused || gameOver) return;
+  if(!collision(current,0,1)){ current.y++; score++; requestDraw(); }
+  else lockPiece();
+  updateHud();
+}
+function hardDrop(){
+  if(!running || paused || gameOver) return;
+  let distance = 0;
+  while(!collision(current,0,1)){ current.y++; distance++; }
+  score += distance * 2;
+  lockPiece();
+  updateHud();
+}
+function holdPiece(){
+  if(!running || paused || gameOver || !canHold) return;
+  canHold = false;
+  if(!hold){
+    hold = {shape:cloneShape(current.shape), color:current.color};
+    current = takeNext();
+  }else{
+    const old = {shape:cloneShape(current.shape), color:current.color};
+    current = {shape:cloneShape(hold.shape), color:hold.color, x:3, y:0};
+    hold = old;
+  }
+  if(collision(current)) finishGame();
+  updateHud();
+}
+function lockPiece(){
+  if(clearingRows.length) return;
+  for(let y=0;y<current.shape.length;y++){
+    for(let x=0;x<current.shape[y].length;x++){
+      if(current.shape[y][x] && current.y+y >= 0 && current.x+x >= 0 && current.x+x < W)
+        board[current.y+y][current.x+x] = current.color;
+    }
+  }
+
+  const rows = [];
+  for(let y=0;y<H;y++) if(board[y].every(Boolean)) rows.push(y);
+
+  if(rows.length){
+    clearingRows = rows;
+    pendingCleared = rows.length;
+    clearAnimStart = performance.now();
+    requestDraw();
+    return;
+  }
+
+  spawnNextPiece();
+}
+function spawnNextPiece(){
+  current = takeNext();
+  canHold = true;
+  requestDraw();
+  if(collision(current)) finishGame();
+}
+function finishLineClear(){
+  const cleared = pendingCleared;
+  // 下の行から消して、上から空行を追加
+  for(let i=clearingRows.length-1;i>=0;i--) board.splice(clearingRows[i],1);
+  while(board.length < H) board.unshift(Array(W).fill(0));
+  clearingRows = [];
+  pendingCleared = 0;
+
+  lines += cleared;
+  const points = [0,100,300,500,800][cleared] || 800;
+  score += points * level;
+  level = Math.floor(lines / 10) + 1;
+  send({type:"score",score,lines});
+  send({type:"garbage",lines:Math.min(4,cleared)});
+  spawnNextPiece();
+  updateHud();
+}
+function getGhostY(){
+  if(!current) return 0;
+  let y = current.y;
+  while(!collision({...current,y},0,1)) y++;
+  return y;
+}
+function addGarbage(count){
+  for(let i=0;i<count;i++){
+    board.shift();
+    const hole = Math.floor(Math.random()*W);
+    const row = Array(W).fill(8);
+    row[hole] = 0;
+    board.push(row);
+  requestDraw();
+  }
+}
+function finishGame(){
+  gameOver = true; running = false;
+  showMessage("GAME OVER");
+  send({type:"alive",alive:false});
+  send({type:"score",score,lines});
+}
+function showMessage(text){
+  const el = $("gameMessage");
+  el.textContent = text;
+  el.classList.remove("hidden");
+}
+function clearMessage(){ $("gameMessage").classList.add("hidden"); }
+
+function drawCell(c,x,y,color,size=CELL){
+  if(y < 0) return;
+  c.fillStyle = COLORS[color-1] || "#777";
+  c.fillRect(x*size+1,y*size+1,size-2,size-2);
+  c.fillStyle = "rgba(255,255,255,.20)";
+  c.fillRect(x*size+3,y*size+3,size-6,5);
+  c.strokeStyle = "rgba(0,0,0,.22)";
+  c.strokeRect(x*size+1.5,y*size+1.5,size-3,size-3);
+}
+function drawMini(c, shape, color, size=20){
+  c.clearRect(0,0,c.canvas.width,c.canvas.height);
+  if(!shape) return;
+  const width = shape[0].length*size;
+  const height = shape.length*size;
+  const ox = (c.canvas.width-width)/2, oy = (c.canvas.height-height)/2;
+  shape.forEach((row,y)=>row.forEach((v,x)=>{
+    if(v){
+      c.fillStyle = COLORS[color-1] || "#777";
+      c.fillRect(ox+x*size+1,oy+y*size+1,size-2,size-2);
+    }
+  }));
+}
+function draw(){
+  ctx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
+  ctx.fillStyle="#060a13"; ctx.fillRect(0,0,300,600);
+  ctx.strokeStyle="rgba(255,255,255,.055)"; ctx.lineWidth=1;
+  for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*CELL+.5,0);ctx.lineTo(x*CELL+.5,600);ctx.stroke();}
+  for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*CELL+.5);ctx.lineTo(300,y*CELL+.5);ctx.stroke();}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(board[y][x])drawCell(ctx,x,y,board[y][x]);
+
+  // ゴーストブロック：実際に着地する位置を半透明で表示
+  if(current && !clearingRows.length){
+    const gy = getGhostY();
+    current.shape.forEach((row,y)=>row.forEach((v,x)=>{
+      if(!v || gy+y < 0) return;
+      const px=(current.x+x)*CELL+2, py=(gy+y)*CELL+2;
+      ctx.fillStyle = "rgba(255,255,255,.10)";
+      ctx.fillRect(px,py,CELL-4,CELL-4);
+      ctx.strokeStyle = "rgba(255,255,255,.42)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px,py,CELL-4,CELL-4);
+    }));
+  }
+
+  if(current && !clearingRows.length) current.shape.forEach((row,y)=>row.forEach((v,x)=>{if(v)drawCell(ctx,current.x+x,current.y+y,current.color)}));
+
+  // ライン消去演出：点滅→白い光が広がる
+  broadcastBoardState(t);
+
+  if(clearingRows.length){
+    const elapsed = performance.now() - clearAnimStart;
+    const progress = Math.min(1, elapsed / clearAnimDuration);
+    const pulse = 0.45 + Math.sin(progress * Math.PI * 4) * 0.25;
+    clearingRows.forEach(y=>{
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(.18,pulse)})`;
+      ctx.fillRect(0,y*CELL,300,CELL);
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0,0.75-progress*.65)})`;
+      const w = 300 * progress;
+      ctx.fillRect((300-w)/2,y*CELL+3,w,CELL-6);
+    });
+  }
+
+  drawMini(nctx,next?.shape,next?.color);
+  drawMini(hctx,hold?.shape,hold?.color);
+}
+let drawDirty = true;
+function requestDraw(){ drawDirty = true; }
+function updateHud(){
+  $("scoreValue").textContent = score.toLocaleString();
+  $("linesValue").textContent = lines;
+  $("levelValue").textContent = level;
+  requestDraw();
+}
+let lastRender = 0;
+function loop(t){
+  const dt = Math.min(100, t - lastTime || 0);
+  lastTime = t;
+
+  if(clearingRows.length){
+    requestDraw();
+    if(t - clearAnimStart >= clearAnimDuration) finishLineClear();
+  } else if(running && !paused && !gameOver){
+    fallTimer += dt;
+    const interval = Math.max(75, 800 - (level-1)*60);
+    if(fallTimer >= interval){ softDrop(); fallTimer = 0; }
+  }
+
+  if(drawDirty && t-lastRender >= 16){
+    draw();
+    drawDirty = false;
+    lastRender = t;
+  }
+  requestAnimationFrame(loop);
+}
+
+function send(obj){
+  if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+function setStatus(text, good=false){
+  $("connectionStatus").textContent = text;
+  $("connectionStatus").classList.toggle("good",good);
+}
+function connect(){
+  if(ws && (ws.readyState===WebSocket.OPEN || ws.readyState===WebSocket.CONNECTING)) return;
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${protocol}//${location.host}`);
+
+  ws.onopen = () => {
+    setStatus("サーバーに接続しました。",true);
+    if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
+    // If the user already joined, do not silently try to create a duplicate room.
+  };
+  ws.onmessage = event => {
+    let m; try{m=JSON.parse(event.data)}catch{return;}
+    handleMessage(m);
+  };
+  ws.onerror = () => setStatus("サーバーとの通信でエラーが発生しました。");
+  ws.onclose = () => {
+    if(intentionalClose) return;
+    if(running){
+      running=false;
+      showMessage("サーバーとの接続が切れました");
+    }else{
+      setStatus("接続が切れました。再接続しています…");
+    }
+    if(!reconnectTimer) reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect()},1500);
+  };
+}
+function handleMessage(m){
+  switch(m.type){
+    case "connected": break;
+    case "joined":
+      myId=m.id; roomCode=m.room;
+      $("roomInput").value=roomCode;
+      $("roomCode").textContent=roomCode;
+      setStatus("ルームに入りました。",true);
+      resetGame();
+      break;
+    case "room_state":
+      roomCode=m.room || roomCode;
+      serverGameStarted = !!m.started;
+      players.clear();
+      (m.players||[]).forEach(p=>players.set(p.id,p));
+      host = players.get(myId)?.host === true;
+      renderLobby();
+      renderGamePlayers();
+      if(!m.started && !serverGameStarted && !$("gameScreen").classList.contains("hidden")){
+        $("gameScreen").classList.add("hidden");
+        $("lobbyScreen").classList.remove("hidden");
+        running=false;
+      }
+      break;
+    case "host_changed":
+      break;
+    case "game_winner": {
+      serverGameStarted = false;
+      gameOver = true;
+      running = false;
+      const isWinner = m.winnerId === myId;
+      showMessage(isWinner ? "🎉 勝利！" : `🏆 ${escapeHtml(m.winnerName || "Player")} の勝利！`);
+      $("rematchBtn").classList.remove("hidden");
+      break;
+    }
+    case "game_start":
+      serverGameStarted = true;
+      remoteBoards.clear();
+      spectateId=null;
+      resetGame();
+      running=true;
+      $("lobbyScreen").classList.add("hidden");
+      $("gameScreen").classList.remove("hidden");
+      $("gameRoomLabel").textContent=`ROOM ${roomCode}`;
+      clearMessage();
+      break;
+    case "board_state":
+      remoteBoards.set(m.id,{board:m.board||[],current:m.current||null,clearing:!!m.clearing});
+      updateRemoteBoardCanvas(m.id);
+      break;
+    case "player_update":{
+      const p=players.get(m.id);
+      if(p){Object.assign(p,m);renderLobby();renderGamePlayers();}
+      break;
+    }
+    case "garbage":
+      if(running && !gameOver) {addGarbage(m.lines);updateHud();}
+      break;
+    case "error":
+      setStatus(m.message || "エラーが発生しました。");
+      break;
+  }
+}
+function renderLobby(){
+  $("roomPanel").classList.toggle("hidden", !roomCode);
+  $("roomCode").textContent=roomCode || "----";
+  $("countLabel").textContent=`${players.size} / ${5}`;
+  const list=$("lobbyPlayers");
+  list.innerHTML="";
+  for(const p of players.values()){
+    const el=document.createElement("div");
+    el.className="lobby-player"+(p.id===myId?" me":"");
+    el.innerHTML=`
+      <div><div class="player-name">${escapeHtml(p.name)} ${p.id===myId?"(自分)":""}</div>
+      <div class="player-meta">${p.host?"部屋主":"参加者"}</div></div>
+      <div class="ready-dot ${p.ready?"":"wait"}">${p.ready?"✓ READY":"WAIT"}</div>`;
+    list.appendChild(el);
+  }
+  const me=players.get(myId);
+  $("readyBtn").textContent=me?.ready ? "READYを解除" : "READY";
+  $("readyBtn").classList.toggle("off",!!me?.ready);
+  $("lobbyStartBtn").classList.toggle("hidden",!host);
+}
+function updateRemoteBoardCanvas(id){
+  const canvas = $("mini-" + id);
+  if(canvas) drawRemoteBoard(canvas, remoteBoards.get(id));
+}
+function renderGamePlayers(){
+  const list=$("gamePlayers");
+  list.innerHTML="";
+  for(const p of players.values()){
+    const el=document.createElement("div");
+    const alive = p.alive !== false;
+    const progress = Math.min(100,(p.lines||0)%10*10);
+    el.className="opponent"+(p.id===myId?" me":"")+(!alive?" dead":"")+(spectateId===p.id?" spectate-target":"");
+    const boardId = `mini-${p.id}`;
+    el.innerHTML=`
+      <div class="opponent-top"><div class="opponent-name">${escapeHtml(p.name)}${p.id===myId?" ★":""}</div>
+      <div class="opponent-status ${alive?"":"dead"}">${alive?"PLAYING":"OUT"}</div></div>
+      <canvas id="${boardId}" class="opponent-board" width="150" height="300"></canvas>
+      <div class="opponent-stats">SCORE ${Number(p.score||0).toLocaleString()}　LINES ${p.lines||0}</div>
+      <div class="meter"><i style="width:${progress}%"></i></div>
+      ${(!alive && p.id!==myId)?'<div class="spectate-label">クリックで観戦</div>':''}`;
+    if(!alive && p.id!==myId){
+      el.onclick=()=>{ spectateId=p.id; renderGamePlayers(); };
+    }
+    list.appendChild(el);
+    drawRemoteBoard($(boardId), remoteBoards.get(p.id));
+  }
+}
+function drawRemoteBoard(canvas, state){
+  if(!canvas) return;
+  const c=canvas.getContext("2d");
+  const bw=150,bh=300,size=15;
+  c.clearRect(0,0,bw,bh);
+  c.fillStyle="#060a13"; c.fillRect(0,0,bw,bh);
+  if(!state) return;
+  const b=state.board||[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(b[y]?.[x]) drawCell(c,x,y,b[y][x],size);
+  if(state.current && !state.clearing){
+    const cur=state.current;
+    cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
+      if(v) drawCell(c,cur.x+x,cur.y+y,cur.color,size);
+    }));
+  }
+}
+function broadcastBoardState(t){
+  if(!running || gameOver || t-lastBoardSend<80) return;
+  lastBoardSend=t;
+  send({type:"board_state", board:board, current:current ? {shape:current.shape,color:current.color,x:current.x,y:current.y}:null, clearing:Boolean(clearingRows.length)});
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function name(){return $("nameInput").value.trim().slice(0,16)||"Player";}
+function createRoom(){
+  if(!ws || ws.readyState!==WebSocket.OPEN) return setStatus("サーバーへ接続中です。少し待ってください。");
+  const requested=$("roomInput").value.replace(/\D/g,"").slice(0,4);
+  send({type:"create",room:requested,name:name()});
+  setStatus("ルームを作成しています…");
+}
+function joinRoom(){
+  if(!ws || ws.readyState!==WebSocket.OPEN) return setStatus("サーバーへ接続中です。少し待ってください。");
+  const code=$("roomInput").value.replace(/\D/g,"").slice(0,4);
+  $("roomInput").value=code;
+  if(code.length!==4) return setStatus("参加には4桁のルームコードが必要です。");
+  send({type:"join",room:code,name:name()});
+  setStatus("ルームに参加しています…");
+}
+function leave(){
+  intentionalClose=true;
+  send({type:"leave"});
+  setTimeout(()=>location.reload(),100);
+}
+$("createBtn").onclick=createRoom;
+$("joinBtn").onclick=joinRoom;
+$("readyBtn").onclick=()=>send({type:"ready"});
+$("lobbyStartBtn").onclick=()=>send({type:"start"});
+$("rematchBtn").onclick=()=>send({type:"restart"});
+$("backBtn").onclick=leave;
+$("copyBtn").onclick=async()=>{
+  try{
+    await navigator.clipboard.writeText(roomCode);
+    setStatus("ルームコードをコピーしました。",true);
+  }catch{
+    setStatus("コピーできませんでした。コードを手動でコピーしてください。");
+  }
+};
+$("roomInput").addEventListener("input",()=>{$("roomInput").value=$("roomInput").value.replace(/\D/g,"").slice(0,4)});
+$("roomInput").addEventListener("keydown",e=>{if(e.key==="Enter")joinRoom()});
+$("nameInput").addEventListener("keydown",e=>{if(e.key==="Enter")createRoom()});
+
+document.addEventListener("keydown",e=>{
+  const tag=e.target?.tagName;
+  if(tag==="INPUT" || tag==="TEXTAREA" || e.target?.isContentEditable) return;
+
+  const key=e.key.toLowerCase();
+  const handled = ["a","d","z","c","w","s","q","p"," ","arrowleft","arrowright","arrowup","arrowdown"].includes(key);
+  if(handled) e.preventDefault();
+
+  // キーボード + 十字キーの両方に対応
+  if(key==="a" || key==="arrowleft") move(-1);
+  else if(key==="d" || key==="arrowright") move(1);
+  else if(key==="z") rotate(-1);
+  else if(key==="c" || key==="arrowup") rotate(1);
+  else if(key==="s" || key==="arrowdown") softDrop();
+  else if(key==="w" || key===" ") hardDrop();
+  else if(key==="q") holdPiece();
+  else if(key==="p" && running){
+    paused=!paused;
+    if(paused) showMessage("PAUSED"); else clearMessage();
+  }
+});
+
+connect();
+resetGame();
+requestAnimationFrame(loop);
+})();
